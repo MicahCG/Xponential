@@ -1,0 +1,151 @@
+import { anthropic } from "@/lib/claude";
+import { prisma } from "@/lib/prisma";
+import type { PersonalityProfile } from "@/lib/personality/types";
+import type { GenerateRequest, GeneratedContent } from "./types";
+import {
+  buildReplyPrompt,
+  buildOriginalPostPrompt,
+  buildQuotePrompt,
+} from "./prompts";
+import { buildMemoryContext } from "./memory";
+import { DEFAULT_GENERATION_COUNT } from "@/lib/constants";
+
+const GENERATION_SYSTEM_PROMPT = `You are a content generation engine for social media. Your job is to produce content that perfectly matches a given personality profile.
+
+Rules:
+- Every option must feel like it was written by the same person
+- Never produce generic, corporate, or AI-sounding content
+- Each option should take a different angle or approach
+- Respect character limits strictly
+- If the personality says "never" do something, don't do it`;
+
+const CONTENT_OPTIONS_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    options: {
+      type: "array" as const,
+      items: {
+        type: "object" as const,
+        properties: {
+          content: {
+            type: "string" as const,
+            description: "The generated post content",
+          },
+          reasoning: {
+            type: "string" as const,
+            description:
+              "Brief explanation of why this angle was chosen",
+          },
+        },
+        required: ["content", "reasoning"],
+      },
+    },
+  },
+  required: ["options"],
+};
+
+async function getActiveProfile(
+  userId: string
+): Promise<PersonalityProfile | null> {
+  const profile = await prisma.personalityProfile.findFirst({
+    where: { userId, isActive: true },
+  });
+
+  if (!profile) return null;
+  return profile.profileData as unknown as PersonalityProfile;
+}
+
+export async function generateContent(
+  request: GenerateRequest,
+  userId: string
+): Promise<GeneratedContent[]> {
+  const profile = await getActiveProfile(userId);
+  if (!profile) {
+    throw new Error(
+      "No personality profile found. Set up your personality first."
+    );
+  }
+
+  const count = request.count ?? DEFAULT_GENERATION_COUNT;
+  const memoryContext = await buildMemoryContext(
+    userId,
+    request.platform,
+    request.targetAuthor
+  );
+
+  let prompt: string;
+
+  switch (request.postType) {
+    case "reply":
+      if (!request.targetPostContent) {
+        throw new Error("Target post content is required for replies");
+      }
+      prompt = buildReplyPrompt({
+        personality: profile,
+        targetPost: request.targetPostContent,
+        targetAuthor: request.targetAuthor ?? "unknown",
+        recentPosts: memoryContext,
+        platform: request.platform,
+        count,
+      });
+      break;
+
+    case "quote":
+      if (!request.targetPostContent) {
+        throw new Error("Target post content is required for quotes");
+      }
+      prompt = buildQuotePrompt({
+        personality: profile,
+        targetPost: request.targetPostContent,
+        targetAuthor: request.targetAuthor ?? "unknown",
+        recentPosts: memoryContext,
+        platform: request.platform,
+        count,
+      });
+      break;
+
+    case "original":
+      if (!request.topic) {
+        throw new Error("Topic is required for original posts");
+      }
+      prompt = buildOriginalPostPrompt({
+        personality: profile,
+        topic: request.topic,
+        recentPosts: memoryContext,
+        platform: request.platform,
+        count,
+        additionalContext: request.additionalContext,
+      });
+      break;
+  }
+
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-5-20250514",
+    max_tokens: 2000,
+    system: GENERATION_SYSTEM_PROMPT,
+    messages: [{ role: "user", content: prompt }],
+    tools: [
+      {
+        name: "submit_content_options",
+        description: "Submit the generated content options",
+        input_schema: CONTENT_OPTIONS_SCHEMA,
+      },
+    ],
+    tool_choice: { type: "tool", name: "submit_content_options" },
+  });
+
+  const toolUse = response.content.find((block) => block.type === "tool_use");
+  if (!toolUse || toolUse.type !== "tool_use") {
+    throw new Error("Failed to generate content");
+  }
+
+  const result = toolUse.input as { options: { content: string; reasoning: string }[] };
+
+  return result.options.map((opt) => ({
+    content: opt.content,
+    reasoning: opt.reasoning,
+    platform: request.platform,
+    postType: request.postType,
+    characterCount: opt.content.length,
+  }));
+}
