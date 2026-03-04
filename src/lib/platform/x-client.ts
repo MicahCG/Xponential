@@ -237,6 +237,24 @@ export async function getUserFollowing(
 }
 
 /**
+ * Batch-fetch follower counts for up to 100 usernames in a single API call.
+ */
+export async function getUsersByUsernames(
+  accessToken: string,
+  usernames: string[]
+): Promise<{ username: string; followersCount: number }[]> {
+  if (usernames.length === 0) return [];
+  const client = createXClient(accessToken);
+  const result = await client.v2.usersByUsernames(usernames.slice(0, 100), {
+    "user.fields": ["public_metrics"],
+  });
+  return (result.data ?? []).map((u) => ({
+    username: u.username.toLowerCase(),
+    followersCount: u.public_metrics?.followers_count ?? 0,
+  }));
+}
+
+/**
  * Fetch recent tweets from a specific account (not the authenticated user).
  * Optionally pass sinceId to only get tweets newer than that ID.
  */

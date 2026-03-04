@@ -67,16 +67,23 @@ interface AutoReplyLog {
 
 const MAX_ENABLED = 10;
 
-// ─── Sorting ─────────────────────────────────────────────────
+// ─── Sorting & Formatting ─────────────────────────────────────
 
 type SortBy = "engagement" | "followers";
 
 function sortAccounts(list: WatchedAccount[], by: SortBy): WatchedAccount[] {
   return [...list].sort((a, b) =>
     by === "followers"
-      ? (b.followersCount ?? -1) - (a.followersCount ?? -1)
+      ? (b.followersCount ?? 0) - (a.followersCount ?? 0)
       : b.replyCount - a.replyCount
   );
+}
+
+function formatFollowers(n: number | null): string {
+  if (n == null) return "— followers";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M followers`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K followers`;
+  return `${n} followers`;
 }
 
 // ─── Main Page ──────────────────────────────────────────────
@@ -468,12 +475,10 @@ function WatchedAccountCard({
             )}
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-            {account.followersCount != null && (
-              <span>{account.followersCount.toLocaleString()} followers</span>
-            )}
+            <span>{formatFollowers(account.followersCount)}</span>
             {account.replyCount > 0 && (
               <>
-                {account.followersCount != null && <span>&middot;</span>}
+                <span>&middot;</span>
                 <span>{account.replyCount} replies from you</span>
               </>
             )}

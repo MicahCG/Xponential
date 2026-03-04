@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getValidAccessToken } from "@/lib/platform/x-client";
+import { getValidAccessToken, getUsersByUsernames } from "@/lib/platform/x-client";
 
 const MAX_ENABLED_ACCOUNTS = 10;
 
@@ -11,10 +11,41 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const accounts = await prisma.watchedAccount.findMany({
+  let accounts = await prisma.watchedAccount.findMany({
     where: { userId: session.user.id },
     orderBy: [{ isRecommended: "asc" }, { replyCount: "desc" }],
   });
+
+  // Backfill followersCount for any accounts that are missing it
+  const nullAccounts = accounts.filter((a) => a.followersCount == null);
+  if (nullAccounts.length > 0) {
+    try {
+      const accessToken = await getValidAccessToken(session.user.id);
+      const usernames = nullAccounts.map((a) => a.accountHandle);
+      const userData = await getUsersByUsernames(accessToken, usernames);
+      const followerMap = new Map(
+        userData.map((u) => [u.username.toLowerCase(), u.followersCount])
+      );
+
+      for (const account of nullAccounts) {
+        const count = followerMap.get(account.accountHandle.toLowerCase());
+        if (count != null) {
+          await prisma.watchedAccount.update({
+            where: { id: account.id },
+            data: { followersCount: count },
+          });
+        }
+      }
+
+      // Re-fetch with updated follower counts
+      accounts = await prisma.watchedAccount.findMany({
+        where: { userId: session.user.id },
+        orderBy: [{ isRecommended: "asc" }, { replyCount: "desc" }],
+      });
+    } catch (err) {
+      console.warn("Could not backfill follower counts:", err);
+    }
+  }
 
   return NextResponse.json({ accounts });
 }

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { ingestFullProfile } from "@/lib/personality/scraper";
 import { analyzePersonality } from "@/lib/personality/analyzer";
 import { getAccountRecommendations } from "@/lib/personality/recommender";
+import { getValidAccessToken, getUsersByUsernames } from "@/lib/platform/x-client";
 
 export async function POST() {
   const session = await auth();
@@ -60,6 +61,32 @@ export async function POST() {
     // Step 4: Get account recommendations
     const { engagedAccounts, recommendedAccounts } =
       await getAccountRecommendations(ingestedData);
+
+    // Step 4b: Fetch follower counts for engaged accounts missing them
+    // (engaged accounts the user replied to but doesn't follow won't have counts)
+    const missingFollowers = engagedAccounts.filter(
+      (a) => a.followersCount == null
+    );
+    if (missingFollowers.length > 0) {
+      try {
+        const accessToken = await getValidAccessToken(userId);
+        const userData = await getUsersByUsernames(
+          accessToken,
+          missingFollowers.map((a) => a.username)
+        );
+        const followerMap = new Map(
+          userData.map((u) => [u.username.toLowerCase(), u.followersCount])
+        );
+        for (const account of engagedAccounts) {
+          if (account.followersCount == null) {
+            const count = followerMap.get(account.username.toLowerCase());
+            if (count != null) account.followersCount = count;
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch follower counts for engaged accounts:", err);
+      }
+    }
 
     // Step 5: Save watched accounts to database (upsert to avoid duplicates)
     const allAccounts = [
