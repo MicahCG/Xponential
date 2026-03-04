@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Twitter, Linkedin, Loader2, Unlink } from "lucide-react";
 import type { PlatformConnectionInfo } from "@/types";
 import { formatDistanceToNow } from "date-fns";
+import { IngestButton } from "./ingest-button";
 
 const platformConfig = {
   x: {
@@ -70,34 +71,39 @@ export function PlatformCard({
           <Badge variant="outline">Not connected</Badge>
         )}
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-3">
         {connection ? (
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              Connected as{" "}
-              <span className="font-medium text-foreground">
-                {platform === "x" ? "@" : ""}
-                {connection.accountHandle}
-              </span>
-              {" "}
-              {formatDistanceToNow(new Date(connection.connectedAt), {
-                addSuffix: true,
-              })}
+          <>
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
+                Connected as{" "}
+                <span className="font-medium text-foreground">
+                  {platform === "x" ? "@" : ""}
+                  {connection.accountHandle}
+                </span>
+                {" "}
+                {formatDistanceToNow(new Date(connection.connectedAt), {
+                  addSuffix: true,
+                })}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDisconnect}
+                disabled={disconnecting}
+              >
+                {disconnecting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Unlink className="mr-2 h-4 w-4" />
+                )}
+                Disconnect
+              </Button>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDisconnect}
-              disabled={disconnecting}
-            >
-              {disconnecting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Unlink className="mr-2 h-4 w-4" />
-              )}
-              Disconnect
-            </Button>
-          </div>
+            {platform === "x" && connection.status === "active" && (
+              <IngestButton />
+            )}
+          </>
         ) : (
           <Button asChild>
             <a href={`/api/connect/start/${platform}`}>

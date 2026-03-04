@@ -1,7 +1,11 @@
 import { anthropic } from "@/lib/claude";
 import type { AnalysisInput, PersonalityProfile } from "./types";
 import { PERSONALITY_PROFILE_SCHEMA } from "./types";
-import { formatTweetsForAnalysis } from "./scraper";
+import {
+  formatTweetsForAnalysis,
+  formatRepliesForAnalysis,
+  formatLikedTweetsForAnalysis,
+} from "./scraper";
 import { formatQuizForAnalysis } from "./quiz";
 
 const ANALYSIS_SYSTEM_PROMPT = `You are an expert at analyzing writing style and personality from social media content.
@@ -12,6 +16,22 @@ Be specific and detailed. Don't use generic descriptions. Pull real patterns fro
 For sample_phrases, include 5-10 characteristic phrases or sentence structures.
 For avoid_patterns, identify things this person would NEVER say.
 For platform_overrides, suggest how the tone might slightly differ between X (shorter, punchier) and LinkedIn (more professional, longer form).`;
+
+const INGEST_SYSTEM_PROMPT = `You are an expert at analyzing writing style, personality, and engagement patterns from social media content.
+
+Your task is to build a comprehensive personality profile optimized for AUTO-REPLY training. This means you need to deeply understand:
+1. How this person writes original posts (their voice, tone, style)
+2. How they REPLY to others — this is critical. Analyze reply patterns, tone shifts, and engagement style.
+3. What content they engage with (likes, replies) — to understand their interests and what triggers engagement.
+
+Be extremely specific. Pull real patterns from the data. This profile will be used by an AI agent to automatically generate replies on their behalf, so accuracy is paramount.
+
+For reply_style, describe exactly how they reply (length, structure, approach).
+For reply_tone_shift, note how replies differ from original posts.
+For engagement_topics, list specific topics they consistently engage with.
+For reply_patterns, identify 3-5 recurring reply structures they use.
+For sample_phrases, include 5-10 characteristic phrases from BOTH posts and replies.
+For avoid_patterns, identify things this person would NEVER say.`;
 
 function formatInputForAnalysis(input: AnalysisInput): string {
   switch (input.method) {
@@ -48,6 +68,49 @@ function formatInputForAnalysis(input: AnalysisInput): string {
       }
       return `Build a personality profile from the following combined data. Weight actual tweet data most heavily, then quiz responses, then self-description.\n\n${sections.join("\n\n")}`;
     }
+
+    case "ingest": {
+      const { ingestedData } = input;
+      const sections: string[] = [];
+
+      // Profile context
+      sections.push(
+        `## Profile\nName: ${ingestedData.profile.name}\nUsername: @${ingestedData.profile.username}\nBio: "${ingestedData.profile.bio}"\nFollowers: ${ingestedData.profile.followerCount} | Following: ${ingestedData.profile.followingCount}`
+      );
+
+      // Original tweets
+      if (ingestedData.originalTweets.length > 0) {
+        sections.push(
+          `## Original Tweets (${ingestedData.originalTweets.length} posts)\n${formatTweetsForAnalysis(ingestedData.originalTweets)}`
+        );
+      }
+
+      // Replies — critical for auto-reply training
+      if (ingestedData.replies.length > 0) {
+        sections.push(
+          `## Replies (${ingestedData.replies.length} replies)\nPay special attention to HOW they reply — structure, tone, length, and approach.\n\n${formatRepliesForAnalysis(ingestedData.replies)}`
+        );
+      }
+
+      // Liked content — shows engagement preferences
+      if (ingestedData.likedTweets.length > 0) {
+        sections.push(
+          `## Liked Tweets (${ingestedData.likedTweets.length} likes)\nThese reveal what content resonates with them and what topics they care about.\n\n${formatLikedTweetsForAnalysis(ingestedData.likedTweets)}`
+        );
+      }
+
+      // Top engaged accounts
+      if (ingestedData.topEngagedAccounts.length > 0) {
+        const accountList = ingestedData.topEngagedAccounts
+          .map((a) => `@${a.username} (${a.replyCount} replies)`)
+          .join(", ");
+        sections.push(
+          `## Top Engaged Accounts\nAccounts they reply to most: ${accountList}`
+        );
+      }
+
+      return `Build a comprehensive personality profile from this full X profile ingestion. Focus especially on REPLY PATTERNS since this will be used for auto-reply training.\n\n${sections.join("\n\n")}`;
+    }
   }
 }
 
@@ -55,11 +118,12 @@ export async function analyzePersonality(
   input: AnalysisInput
 ): Promise<PersonalityProfile> {
   const userMessage = formatInputForAnalysis(input);
+  const isIngest = input.method === "ingest";
 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-5-20250514",
-    max_tokens: 2000,
-    system: ANALYSIS_SYSTEM_PROMPT,
+    max_tokens: 3000,
+    system: isIngest ? INGEST_SYSTEM_PROMPT : ANALYSIS_SYSTEM_PROMPT,
     messages: [{ role: "user", content: userMessage }],
     tools: [
       {

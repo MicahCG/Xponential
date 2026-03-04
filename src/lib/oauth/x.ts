@@ -5,7 +5,14 @@ const X_AUTH_URL = "https://twitter.com/i/oauth2/authorize";
 const X_TOKEN_URL = "https://api.twitter.com/2/oauth2/token";
 const X_REVOKE_URL = "https://api.twitter.com/2/oauth2/revoke";
 
-const SCOPES = ["tweet.read", "tweet.write", "users.read", "offline.access"];
+// Note: like.read and follows.read can be added once enabled in Twitter Developer Portal
+// The ingestion gracefully falls back if those scopes aren't available
+const SCOPES = [
+  "tweet.read",
+  "tweet.write",
+  "users.read",
+  "offline.access",
+];
 
 export function generatePKCE() {
   const codeVerifier = crypto.randomBytes(32).toString("base64url");

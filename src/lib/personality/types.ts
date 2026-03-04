@@ -1,3 +1,5 @@
+import type { IngestedProfile } from "./scraper";
+
 export interface PersonalityProfile {
   tone: string;
   humor_style: string;
@@ -7,6 +9,11 @@ export interface PersonalityProfile {
   avoid_patterns: string[];
   sample_phrases: string[];
   cultural_references: string;
+  // Reply-specific fields (populated by ingest method)
+  reply_style?: string;
+  reply_tone_shift?: string;
+  engagement_topics?: string[];
+  reply_patterns?: string[];
   platform_overrides: {
     x?: Partial<Omit<PersonalityProfile, "platform_overrides">>;
     linkedin?: Partial<Omit<PersonalityProfile, "platform_overrides">>;
@@ -43,7 +50,8 @@ export type AnalysisInput =
   | { method: "scrape"; tweets: string[] }
   | { method: "quiz"; answers: QuizAnswer[] }
   | { method: "freetext"; description: string; samplePosts?: string[] }
-  | { method: "hybrid"; parts: Partial<{ tweets: string[]; answers: QuizAnswer[]; description: string }> };
+  | { method: "hybrid"; parts: Partial<{ tweets: string[]; answers: QuizAnswer[]; description: string }> }
+  | { method: "ingest"; ingestedData: IngestedProfile };
 
 export const PERSONALITY_PROFILE_SCHEMA = {
   type: "object" as const,
@@ -83,11 +91,39 @@ export const PERSONALITY_PROFILE_SCHEMA = {
       type: "string" as const,
       description: "Domains of cultural references (e.g., 'tech, sports, pop culture')",
     },
+    reply_style: {
+      type: "string" as const,
+      description:
+        "How they reply to others (e.g., 'short and punchy', 'asks follow-up questions', 'adds personal anecdotes')",
+    },
+    reply_tone_shift: {
+      type: "string" as const,
+      description:
+        "How their tone shifts when replying vs posting original content (e.g., 'more casual in replies', 'more direct')",
+    },
+    engagement_topics: {
+      type: "array" as const,
+      items: { type: "string" as const },
+      description:
+        "Topics they consistently engage with (reply to, like, quote)",
+    },
+    reply_patterns: {
+      type: "array" as const,
+      items: { type: "string" as const },
+      description:
+        "Recurring reply patterns (e.g., 'leads with agreement then adds perspective', 'drops a one-liner', 'asks a probing question')",
+    },
     platform_overrides: {
       type: "object" as const,
       properties: {
-        x: { type: "object" as const, description: "X-specific tone adjustments" },
-        linkedin: { type: "object" as const, description: "LinkedIn-specific tone adjustments" },
+        x: {
+          type: "object" as const,
+          description: "X-specific tone adjustments",
+        },
+        linkedin: {
+          type: "object" as const,
+          description: "LinkedIn-specific tone adjustments",
+        },
       },
       description: "Platform-specific overrides",
     },
@@ -101,6 +137,10 @@ export const PERSONALITY_PROFILE_SCHEMA = {
     "avoid_patterns",
     "sample_phrases",
     "cultural_references",
+    "reply_style",
+    "reply_tone_shift",
+    "engagement_topics",
+    "reply_patterns",
     "platform_overrides",
   ],
 };

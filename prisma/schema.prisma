@@ -26,6 +26,7 @@ model User {
   personalityProfiles PersonalityProfile[]
   postHistory         PostHistory[]
   contentQueue        ContentQueue[]
+  watchedAccounts     WatchedAccount[]
 
   @@map("users")
 }
@@ -118,6 +119,7 @@ enum PersonalityMethod {
   quiz
   freetext
   hybrid
+  ingest
 }
 
 model PersonalityProfile {
@@ -194,4 +196,23 @@ model ContentQueue {
 
   @@index([userId, status])
   @@map("content_queue")
+}
+
+model WatchedAccount {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  platform       Platform
+  accountHandle  String   @map("account_handle")
+  accountId      String?  @map("account_id")
+  followersCount Int?     @map("followers_count")
+  isRecommended  Boolean  @default(false) @map("is_recommended")
+  isEnabled      Boolean  @default(false) @map("is_enabled")
+  replyCount     Int      @default(0) @map("reply_count")
+  category       String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, platform, accountHandle])
+  @@map("watched_accounts")
 }
