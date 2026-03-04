@@ -62,30 +62,33 @@ export async function POST() {
     const { engagedAccounts, recommendedAccounts } =
       await getAccountRecommendations(ingestedData);
 
-    // Step 4b: Fetch follower counts for engaged accounts missing them
-    // (engaged accounts the user replied to but doesn't follow won't have counts)
-    const missingFollowers = engagedAccounts.filter(
-      (a) => a.followersCount == null
-    );
-    if (missingFollowers.length > 0) {
-      try {
-        const accessToken = await getValidAccessToken(userId);
-        const userData = await getUsersByUsernames(
-          accessToken,
-          missingFollowers.map((a) => a.username)
-        );
-        const followerMap = new Map(
-          userData.map((u) => [u.username.toLowerCase(), u.followersCount])
-        );
-        for (const account of engagedAccounts) {
-          if (account.followersCount == null) {
-            const count = followerMap.get(account.username.toLowerCase());
-            if (count != null) account.followersCount = count;
-          }
+    // Step 4b: Fetch Twitter IDs + follower counts for all engaged/recommended accounts
+    // Engaged accounts replied to but not followed won't have this data from the scrape
+    try {
+      const allHandles = [
+        ...engagedAccounts.map((a) => a.username),
+        ...recommendedAccounts.map((a) => a.username),
+      ];
+      const accessToken = await getValidAccessToken(userId);
+      const userData = await getUsersByUsernames(accessToken, allHandles);
+      const userMap = new Map(userData.map((u) => [u.username.toLowerCase(), u]));
+
+      for (const account of engagedAccounts) {
+        const data = userMap.get(account.username.toLowerCase());
+        if (data) {
+          if (account.followersCount == null) account.followersCount = data.followersCount;
+          (account as typeof account & { accountId?: string }).accountId = data.id;
         }
-      } catch (err) {
-        console.warn("Could not fetch follower counts for engaged accounts:", err);
       }
+      for (const account of recommendedAccounts) {
+        const data = userMap.get(account.username.toLowerCase());
+        if (data) {
+          if (account.followersCount == null) account.followersCount = data.followersCount;
+          (account as typeof account & { accountId?: string }).accountId = data.id;
+        }
+      }
+    } catch (err) {
+      console.warn("Could not fetch Twitter IDs for accounts:", err);
     }
 
     // Step 5: Save watched accounts to database (upsert to avoid duplicates)
@@ -94,6 +97,7 @@ export async function POST() {
         userId: userId,
         platform: "x" as const,
         accountHandle: a.username,
+        accountId: (a as typeof a & { accountId?: string }).accountId ?? null,
         followersCount: a.followersCount ?? null,
         isRecommended: false,
         isEnabled: false,
@@ -104,6 +108,7 @@ export async function POST() {
         userId: userId,
         platform: "x" as const,
         accountHandle: a.username,
+        accountId: (a as typeof a & { accountId?: string }).accountId ?? null,
         followersCount: a.followersCount ?? null,
         isRecommended: true,
         isEnabled: false,
@@ -123,6 +128,7 @@ export async function POST() {
         },
         create: account,
         update: {
+          accountId: account.accountId,
           followersCount: account.followersCount,
           replyCount: account.replyCount,
           category: account.category,

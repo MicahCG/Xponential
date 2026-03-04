@@ -16,34 +16,39 @@ export async function GET() {
     orderBy: [{ isRecommended: "asc" }, { replyCount: "desc" }],
   });
 
-  // Backfill followersCount for any accounts that are missing it
-  const nullAccounts = accounts.filter((a) => a.followersCount == null);
-  if (nullAccounts.length > 0) {
+  // Backfill followersCount and accountId for any accounts that are missing them
+  const needsBackfill = accounts.filter(
+    (a) => a.followersCount == null || a.accountId == null
+  );
+  if (needsBackfill.length > 0) {
     try {
       const accessToken = await getValidAccessToken(session.user.id);
-      const usernames = nullAccounts.map((a) => a.accountHandle);
+      const usernames = needsBackfill.map((a) => a.accountHandle);
       const userData = await getUsersByUsernames(accessToken, usernames);
-      const followerMap = new Map(
-        userData.map((u) => [u.username.toLowerCase(), u.followersCount])
+      const userMap = new Map(
+        userData.map((u) => [u.username.toLowerCase(), u])
       );
 
-      for (const account of nullAccounts) {
-        const count = followerMap.get(account.accountHandle.toLowerCase());
-        if (count != null) {
+      for (const account of needsBackfill) {
+        const data = userMap.get(account.accountHandle.toLowerCase());
+        if (data) {
           await prisma.watchedAccount.update({
             where: { id: account.id },
-            data: { followersCount: count },
+            data: {
+              ...(account.followersCount == null && { followersCount: data.followersCount }),
+              ...(account.accountId == null && { accountId: data.id }),
+            },
           });
         }
       }
 
-      // Re-fetch with updated follower counts
+      // Re-fetch with updated data
       accounts = await prisma.watchedAccount.findMany({
         where: { userId: session.user.id },
         orderBy: [{ isRecommended: "asc" }, { replyCount: "desc" }],
       });
     } catch (err) {
-      console.warn("Could not backfill follower counts:", err);
+      console.warn("Could not backfill account data:", err);
     }
   }
 

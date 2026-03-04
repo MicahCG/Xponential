@@ -242,13 +242,14 @@ export async function getUserFollowing(
 export async function getUsersByUsernames(
   accessToken: string,
   usernames: string[]
-): Promise<{ username: string; followersCount: number }[]> {
+): Promise<{ id: string; username: string; followersCount: number }[]> {
   if (usernames.length === 0) return [];
   const client = createXClient(accessToken);
   const result = await client.v2.usersByUsernames(usernames.slice(0, 100), {
     "user.fields": ["public_metrics"],
   });
   return (result.data ?? []).map((u) => ({
+    id: u.id,
     username: u.username.toLowerCase(),
     followersCount: u.public_metrics?.followers_count ?? 0,
   }));
