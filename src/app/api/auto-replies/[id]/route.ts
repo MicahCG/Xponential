@@ -16,6 +16,7 @@ export async function PUT(
   const { id } = await params;
   const body = await request.json();
   const action = body.action; // "approve" or "reject"
+  const editedContent = body.content as string | undefined;
 
   if (!["approve", "reject"].includes(action)) {
     return NextResponse.json(
@@ -47,12 +48,13 @@ export async function PUT(
     return NextResponse.json({ success: true, status: "rejected" });
   }
 
-  // Approve: post the reply
+  // Approve: post the reply (use edited content if provided)
+  const contentToPost = editedContent?.trim() || replyLog.replyContent;
   try {
     const accessToken = await getValidAccessToken(session.user.id);
     const result = await postTweet(
       accessToken,
-      replyLog.replyContent,
+      contentToPost,
       replyLog.targetTweetId
     );
 
@@ -60,6 +62,7 @@ export async function PUT(
       where: { id },
       data: {
         status: "posted",
+        replyContent: contentToPost,
         replyTweetId: result.id,
         postedAt: new Date(),
       },
@@ -71,7 +74,7 @@ export async function PUT(
         userId: session.user.id,
         platform: "x",
         postType: "reply",
-        content: replyLog.replyContent,
+        content: contentToPost,
         targetPostId: replyLog.targetTweetId,
         targetAuthor: replyLog.targetAuthor,
         platformPostId: result.id,
