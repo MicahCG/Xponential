@@ -85,81 +85,11 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
         // Generate and handle replies for each new tweet
         for (const tweet of tweets) {
           try {
-            // Generate a reply using the existing content generator
-            const generated = await generateContent(
-              {
-                platform: "x",
-                postType: "reply",
-                targetPostContent: tweet.text,
-                targetAuthor: account.accountHandle,
-                count: 1,
-              },
-              userId
-            );
+            if (account.replyType === "video") {
+              // For video replies, queue a pending log entry.
+              // The Popcorn video generation and posting flow can hook into these logs.
+              result.repliesGenerated++;
 
-            if (!generated.length) continue;
-
-            const replyContent = generated[0].content;
-            result.repliesGenerated++;
-
-            if (account.replyMode === "auto") {
-              // Auto mode: post immediately
-              try {
-                const posted = await postTweet(
-                  accessToken,
-                  replyContent,
-                  tweet.id
-                );
-
-                await prisma.autoReplyLog.create({
-                  data: {
-                    userId,
-                    watchedAccountId: account.id,
-                    targetTweetId: tweet.id,
-                    targetTweetText: tweet.text,
-                    targetAuthor: account.accountHandle,
-                    replyContent,
-                    replyType: "text",
-                    replyTweetId: posted.id,
-                    status: "posted",
-                    postedAt: new Date(),
-                  },
-                });
-
-                // Also record in post history
-                await prisma.postHistory.create({
-                  data: {
-                    userId,
-                    platform: "x",
-                    postType: "reply",
-                    content: replyContent,
-                    targetPostId: tweet.id,
-                    targetAuthor: account.accountHandle,
-                    platformPostId: posted.id,
-                  },
-                });
-
-                result.repliesPosted++;
-              } catch (postErr) {
-                // Log as failed if posting fails
-                await prisma.autoReplyLog.create({
-                  data: {
-                    userId,
-                    watchedAccountId: account.id,
-                    targetTweetId: tweet.id,
-                    targetTweetText: tweet.text,
-                    targetAuthor: account.accountHandle,
-                    replyContent,
-                    replyType: "text",
-                    status: "failed",
-                  },
-                });
-                result.errors.push(
-                  `@${account.accountHandle}: Failed to post reply - ${postErr instanceof Error ? postErr.message : "unknown"}`
-                );
-              }
-            } else {
-              // Manual mode: save as pending
               await prisma.autoReplyLog.create({
                 data: {
                   userId,
@@ -167,11 +97,100 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
                   targetTweetId: tweet.id,
                   targetTweetText: tweet.text,
                   targetAuthor: account.accountHandle,
-                  replyContent,
-                  replyType: "text",
+                  replyContent: "",
+                  replyType: "video",
                   status: "pending",
                 },
               });
+            } else {
+              // Text-based reply: generate using the existing content generator
+              const generated = await generateContent(
+                {
+                  platform: "x",
+                  postType: "reply",
+                  targetPostContent: tweet.text,
+                  targetAuthor: account.accountHandle,
+                  count: 1,
+                },
+                userId
+              );
+
+              if (!generated.length) continue;
+
+              const replyContent = generated[0].content;
+              result.repliesGenerated++;
+
+              if (account.replyMode === "auto") {
+                // Auto mode: post immediately
+                try {
+                  const posted = await postTweet(
+                    accessToken,
+                    replyContent,
+                    tweet.id
+                  );
+
+                  await prisma.autoReplyLog.create({
+                    data: {
+                      userId,
+                      watchedAccountId: account.id,
+                      targetTweetId: tweet.id,
+                      targetTweetText: tweet.text,
+                      targetAuthor: account.accountHandle,
+                      replyContent,
+                      replyType: "text",
+                      replyTweetId: posted.id,
+                      status: "posted",
+                      postedAt: new Date(),
+                    },
+                  });
+
+                  // Also record in post history
+                  await prisma.postHistory.create({
+                    data: {
+                      userId,
+                      platform: "x",
+                      postType: "reply",
+                      content: replyContent,
+                      targetPostId: tweet.id,
+                      targetAuthor: account.accountHandle,
+                      platformPostId: posted.id,
+                    },
+                  });
+
+                  result.repliesPosted++;
+                } catch (postErr) {
+                  // Log as failed if posting fails
+                  await prisma.autoReplyLog.create({
+                    data: {
+                      userId,
+                      watchedAccountId: account.id,
+                      targetTweetId: tweet.id,
+                      targetTweetText: tweet.text,
+                      targetAuthor: account.accountHandle,
+                      replyContent,
+                      replyType: "text",
+                      status: "failed",
+                    },
+                  });
+                  result.errors.push(
+                    `@${account.accountHandle}: Failed to post reply - ${postErr instanceof Error ? postErr.message : "unknown"}`
+                  );
+                }
+              } else {
+                // Manual mode: save as pending
+                await prisma.autoReplyLog.create({
+                  data: {
+                    userId,
+                    watchedAccountId: account.id,
+                    targetTweetId: tweet.id,
+                    targetTweetText: tweet.text,
+                    targetAuthor: account.accountHandle,
+                    replyContent,
+                    replyType: "text",
+                    status: "pending",
+                  },
+                });
+              }
             }
           } catch (genErr) {
             result.errors.push(

@@ -43,6 +43,9 @@ export async function PUT(
   if (body.replyMode === "auto" || body.replyMode === "manual") {
     updateData.replyMode = body.replyMode;
   }
+  if (body.replyType === "text" || body.replyType === "video") {
+    updateData.replyType = body.replyType;
+  }
 
   const updated = await prisma.watchedAccount.update({
     where: { id },

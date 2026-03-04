@@ -47,6 +47,7 @@ interface WatchedAccount {
   isEnabled: boolean;
   replyCount: number;
   replyMode: string;
+  replyType: string;
   category: string | null;
 }
 
@@ -142,6 +143,18 @@ export default function AutoReplyPage() {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ replyMode }),
+    });
+  };
+
+  const handleReplyTypeChange = async (id: string, replyType: string) => {
+    setAccounts((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, replyType } : a))
+    );
+
+    await fetch(`/api/watched-accounts/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ replyType }),
     });
   };
 
@@ -256,6 +269,9 @@ export default function AutoReplyPage() {
                 canEnable={true}
                 onToggle={(enabled) => handleToggle(account.id, enabled)}
                 onModeChange={(mode) => handleModeChange(account.id, mode)}
+                onReplyTypeChange={(type) =>
+                  handleReplyTypeChange(account.id, type)
+                }
                 onRemove={() => handleRemove(account.id)}
               />
             ))}
@@ -284,6 +300,9 @@ export default function AutoReplyPage() {
                 canEnable={enabledCount < MAX_ENABLED}
                 onToggle={(enabled) => handleToggle(account.id, enabled)}
                 onModeChange={(mode) => handleModeChange(account.id, mode)}
+                onReplyTypeChange={(type) =>
+                  handleReplyTypeChange(account.id, type)
+                }
                 onRemove={() => handleRemove(account.id)}
               />
             ))}
@@ -311,6 +330,9 @@ export default function AutoReplyPage() {
                 canEnable={enabledCount < MAX_ENABLED}
                 onToggle={(enabled) => handleToggle(account.id, enabled)}
                 onModeChange={(mode) => handleModeChange(account.id, mode)}
+                onReplyTypeChange={(type) =>
+                  handleReplyTypeChange(account.id, type)
+                }
                 onRemove={() => handleRemove(account.id)}
               />
             ))}
@@ -408,12 +430,14 @@ function WatchedAccountCard({
   canEnable,
   onToggle,
   onModeChange,
+  onReplyTypeChange,
   onRemove,
 }: {
   account: WatchedAccount;
   canEnable: boolean;
   onToggle: (enabled: boolean) => void;
   onModeChange: (mode: string) => void;
+  onReplyTypeChange: (type: string) => void;
   onRemove: () => void;
 }) {
   return (
@@ -449,16 +473,23 @@ function WatchedAccountCard({
           </div>
         </div>
 
-        {/* Reply Type badges */}
+        {/* Reply type selection */}
         <div className="flex items-center gap-1">
-          <Badge variant="outline" className="gap-1 text-xs">
+          <Badge
+            variant={account.replyType === "text" ? "default" : "outline"}
+            className="gap-1 text-xs cursor-pointer"
+            onClick={() => onReplyTypeChange("text")}
+          >
             <MessageSquareReply className="h-3 w-3" />
-            Text
+            Written
           </Badge>
           <Badge
-            variant="outline"
-            className="gap-1 text-xs opacity-40"
-            title="Coming soon"
+            variant={account.replyType === "video" ? "default" : "outline"}
+            className={cn(
+              "gap-1 text-xs cursor-pointer",
+              !account.isEnabled && "opacity-40 cursor-not-allowed"
+            )}
+            onClick={() => account.isEnabled && onReplyTypeChange("video")}
           >
             <Video className="h-3 w-3" />
             Video
