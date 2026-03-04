@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -30,6 +31,7 @@ import {
   XCircle,
   Sparkles,
   TrendingUp,
+  Save,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
@@ -88,6 +90,9 @@ export default function AutoReplyPage() {
   const [newHandle, setNewHandle] = useState("");
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [replyInstructions, setReplyInstructions] = useState("");
+  const [savedInstructions, setSavedInstructions] = useState("");
+  const [savingInstructions, setSavingInstructions] = useState(false);
   const enabledCount = accounts.filter((a) => a.isEnabled).length;
 
   const activeAccounts = [...accounts.filter((a) => a.isEnabled)].sort(
@@ -110,11 +115,18 @@ export default function AutoReplyPage() {
         const fetched: WatchedAccount[] = data.accounts ?? [];
         setAccounts(fetched);
 
+        // Load reply instructions from profile
+        const profileOk = profileRes.ok;
+        const profile = profileOk ? await profileRes.json() : null;
+
+        if (profile?.replyInstructions) {
+          setReplyInstructions(profile.replyInstructions);
+          setSavedInstructions(profile.replyInstructions);
+        }
+
         if (fetched.length === 0) {
           // Always re-analyze when there are no watched accounts —
           // this re-scrapes Twitter and regenerates recommendations
-          const profileOk = profileRes.ok;
-          const profile = profileOk ? await profileRes.json() : null;
           setHasProfile(!!profile?.id);
           setOnboardingStep("analyze");
         } else {
@@ -144,6 +156,24 @@ export default function AutoReplyPage() {
     setOnboardingStep(null);
     fetchData();
   }, [fetchData]);
+
+  const handleSaveInstructions = async () => {
+    setSavingInstructions(true);
+    try {
+      const res = await fetch("/api/personality/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ replyInstructions }),
+      });
+      if (res.ok) {
+        setSavedInstructions(replyInstructions);
+      }
+    } catch {
+      // Silently fail
+    } finally {
+      setSavingInstructions(false);
+    }
+  };
 
   const handleToggle = async (id: string, isEnabled: boolean) => {
     setAccounts((prev) =>
@@ -331,6 +361,43 @@ export default function AutoReplyPage() {
         </span>
         {addError && <p className="text-sm text-destructive">{addError}</p>}
       </div>
+
+      {/* Reply Instructions */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Reply Instructions</CardTitle>
+          <CardDescription>
+            Tell your AI agent how to adjust its personality when replying.
+            These instructions override the default personality profile.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Textarea
+            value={replyInstructions}
+            onChange={(e) => setReplyInstructions(e.target.value)}
+            placeholder="e.g. Be more sarcastic, reference crypto culture, keep replies under 2 sentences, don't use emojis..."
+            rows={3}
+            maxLength={1000}
+          />
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">
+              {replyInstructions.length}/1000
+            </span>
+            <Button
+              onClick={handleSaveInstructions}
+              disabled={savingInstructions || replyInstructions === savedInstructions}
+              size="sm"
+            >
+              {savingInstructions ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Save
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Active accounts — sorted */}
       {activeAccounts.length > 0 && (

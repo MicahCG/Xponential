@@ -200,20 +200,38 @@ export async function getUserLikedTweets(
   maxResults = 50
 ) {
   const client = createXClient(accessToken);
-  const liked = await client.v2.userLikedTweets(userId, {
-    max_results: Math.min(maxResults, 100),
-    "tweet.fields": ["created_at", "text", "author_id", "public_metrics"],
-    expansions: ["author_id"],
-    "user.fields": ["username", "name"],
-  });
+  const allLiked: { text: string; authorUsername: string }[] = [];
+  let paginationToken: string | undefined;
+  let fetched = 0;
 
-  const users = liked.data.includes?.users ?? [];
-  const userMap = new Map(users.map((u) => [u.id, u.username]));
+  while (fetched < maxResults) {
+    const batchSize = Math.min(100, maxResults - fetched);
+    const liked = await client.v2.userLikedTweets(userId, {
+      max_results: batchSize,
+      "tweet.fields": ["created_at", "text", "author_id", "public_metrics"],
+      expansions: ["author_id"],
+      "user.fields": ["username", "name"],
+      ...(paginationToken ? { pagination_token: paginationToken } : {}),
+    });
 
-  return (liked.data.data ?? []).map((tweet) => ({
-    text: tweet.text,
-    authorUsername: userMap.get(tweet.author_id ?? "") ?? "unknown",
-  }));
+    const users = liked.data.includes?.users ?? [];
+    const userMap = new Map(users.map((u) => [u.id, u.username]));
+    const tweets = liked.data.data ?? [];
+
+    for (const tweet of tweets) {
+      allLiked.push({
+        text: tweet.text,
+        authorUsername: userMap.get(tweet.author_id ?? "") ?? "unknown",
+      });
+    }
+
+    fetched += tweets.length;
+    paginationToken = liked.data.meta?.next_token;
+
+    if (!paginationToken || tweets.length === 0) break;
+  }
+
+  return allLiked;
 }
 
 export async function getUserFollowing(
@@ -222,18 +240,42 @@ export async function getUserFollowing(
   maxResults = 100
 ) {
   const client = createXClient(accessToken);
-  const following = await client.v2.following(userId, {
-    max_results: Math.min(maxResults, 100),
-    "user.fields": ["username", "name", "public_metrics", "description"],
-  });
+  const allFollowing: {
+    id: string;
+    username: string;
+    name: string;
+    bio?: string;
+    followersCount: number;
+  }[] = [];
+  let paginationToken: string | undefined;
+  let fetched = 0;
 
-  return (following.data ?? []).map((user) => ({
-    id: user.id,
-    username: user.username,
-    name: user.name,
-    bio: (user as unknown as Record<string, unknown>).description as string | undefined,
-    followersCount: user.public_metrics?.followers_count ?? 0,
-  }));
+  while (fetched < maxResults) {
+    const batchSize = Math.min(100, maxResults - fetched);
+    const following = await client.v2.following(userId, {
+      max_results: batchSize,
+      "user.fields": ["username", "name", "public_metrics", "description"],
+      ...(paginationToken ? { pagination_token: paginationToken } : {}),
+    });
+
+    const users = following.data ?? [];
+    for (const user of users) {
+      allFollowing.push({
+        id: user.id,
+        username: user.username,
+        name: user.name,
+        bio: (user as unknown as Record<string, unknown>).description as string | undefined,
+        followersCount: user.public_metrics?.followers_count ?? 0,
+      });
+    }
+
+    fetched += users.length;
+    paginationToken = following.meta?.next_token;
+
+    if (!paginationToken || users.length === 0) break;
+  }
+
+  return allFollowing;
 }
 
 /**

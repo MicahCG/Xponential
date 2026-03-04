@@ -10,8 +10,6 @@ import {
   Link2,
   Brain,
   MessageSquareReply,
-  History,
-  Settings,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -21,8 +19,6 @@ const navItems = [
   { href: "/connections", label: "Connections", icon: Link2 },
   { href: "/personality", label: "Personality", icon: Brain },
   { href: "/content", label: "Auto-Replies", icon: MessageSquareReply },
-  { href: "/content/history", label: "History", icon: History },
-  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar() {

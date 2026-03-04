@@ -46,26 +46,31 @@ const CONTENT_OPTIONS_SCHEMA = {
 
 async function getActiveProfile(
   userId: string
-): Promise<PersonalityProfile | null> {
+): Promise<{ personality: PersonalityProfile; replyInstructions: string | null } | null> {
   const profile = await prisma.personalityProfile.findFirst({
     where: { userId, isActive: true },
+    select: { profileData: true, replyInstructions: true },
   });
 
   if (!profile) return null;
-  return profile.profileData as unknown as PersonalityProfile;
+  return {
+    personality: profile.profileData as unknown as PersonalityProfile,
+    replyInstructions: profile.replyInstructions,
+  };
 }
 
 export async function generateContent(
   request: GenerateRequest,
   userId: string
 ): Promise<GeneratedContent[]> {
-  const profile = await getActiveProfile(userId);
-  if (!profile) {
+  const activeProfile = await getActiveProfile(userId);
+  if (!activeProfile) {
     throw new Error(
       "No personality profile found. Set up your personality first."
     );
   }
 
+  const { personality: profile, replyInstructions } = activeProfile;
   const count = request.count ?? DEFAULT_GENERATION_COUNT;
   const memoryContext = await buildMemoryContext(
     userId,
@@ -87,6 +92,7 @@ export async function generateContent(
         recentPosts: memoryContext,
         platform: request.platform,
         count,
+        replyInstructions,
       });
       break;
 
@@ -101,6 +107,7 @@ export async function generateContent(
         recentPosts: memoryContext,
         platform: request.platform,
         count,
+        replyInstructions,
       });
       break;
 
@@ -115,6 +122,7 @@ export async function generateContent(
         platform: request.platform,
         count,
         additionalContext: request.additionalContext,
+        replyInstructions,
       });
       break;
   }

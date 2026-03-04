@@ -15,6 +15,7 @@ export async function GET() {
       id: true,
       method: true,
       profileData: true,
+      replyInstructions: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -53,16 +54,21 @@ export async function PUT(request: NextRequest) {
     );
   }
 
+  const { replyInstructions, ...profileUpdates } = parsed.data;
   const currentData = existing.profileData as Record<string, unknown>;
-  const updatedData = { ...currentData, ...parsed.data };
+  const updatedData = { ...currentData, ...profileUpdates };
 
   const updated = await prisma.personalityProfile.update({
     where: { id: existing.id },
-    data: { profileData: JSON.parse(JSON.stringify(updatedData)) },
+    data: {
+      profileData: JSON.parse(JSON.stringify(updatedData)),
+      ...(replyInstructions !== undefined && { replyInstructions }),
+    },
   });
 
   return NextResponse.json({
     id: updated.id,
     profile: updated.profileData,
+    replyInstructions: updated.replyInstructions,
   });
 }

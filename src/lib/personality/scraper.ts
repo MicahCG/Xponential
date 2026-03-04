@@ -49,11 +49,11 @@ export async function ingestFullProfile(
   // Fetch full profile with bio and metrics
   const profile = await getUserProfileFull(accessToken);
 
-  // Fetch timeline with replies (up to 200 tweets, paginated)
+  // Fetch timeline with replies (up to 800 tweets, paginated)
   const allTweets = await getUserTimelineWithReplies(
     accessToken,
     profile.id,
-    200
+    800
   );
 
   // Separate original tweets from replies
@@ -82,18 +82,18 @@ export async function ingestFullProfile(
     .sort((a, b) => b.replyCount - a.replyCount)
     .slice(0, 20);
 
-  // Fetch liked tweets (up to 50)
+  // Fetch liked tweets (up to 200)
   let likedTweets: { text: string; authorUsername: string }[] = [];
   try {
-    likedTweets = await getUserLikedTweets(accessToken, profile.id, 50);
+    likedTweets = await getUserLikedTweets(accessToken, profile.id, 200);
   } catch (err) {
     console.warn("Could not fetch liked tweets (may need like.read scope):", err);
   }
 
-  // Fetch following list (up to 100)
+  // Fetch following list (up to 300)
   let following: IngestedProfile["following"] = [];
   try {
-    following = await getUserFollowing(accessToken, profile.id, 100);
+    following = await getUserFollowing(accessToken, profile.id, 300);
   } catch (err) {
     console.warn("Could not fetch following (may need follows.read scope):", err);
   }

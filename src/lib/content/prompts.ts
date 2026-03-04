@@ -13,6 +13,11 @@ function serializeProfile(profile: PersonalityProfile): string {
 - NEVER do: ${profile.avoid_patterns.join(", ")}`;
 }
 
+function instructionsBlock(instructions: string | null | undefined): string {
+  if (!instructions) return "";
+  return `\nIMPORTANT — The user has provided these specific instructions for how they want their content to sound:\n"${instructions}"\nFollow these instructions closely. They override the personality profile where they conflict.\n`;
+}
+
 export function buildReplyPrompt(params: {
   personality: PersonalityProfile;
   targetPost: string;
@@ -20,6 +25,7 @@ export function buildReplyPrompt(params: {
   recentPosts: string[];
   platform: "x" | "linkedin";
   count: number;
+  replyInstructions?: string | null;
 }) {
   const charLimit =
     params.platform === "x" ? X_CHAR_LIMIT : LINKEDIN_CHAR_LIMIT;
@@ -32,7 +38,7 @@ export function buildReplyPrompt(params: {
 
 ${serializeProfile(params.personality)}
 ${platformProfile ? `\nPlatform-specific adjustments: ${JSON.stringify(platformProfile)}` : ""}
-
+${instructionsBlock(params.replyInstructions)}
 They are replying to this post by @${params.targetAuthor}:
 "${params.targetPost}"
 
@@ -56,6 +62,7 @@ export function buildOriginalPostPrompt(params: {
   platform: "x" | "linkedin";
   count: number;
   additionalContext?: string;
+  replyInstructions?: string | null;
 }) {
   const charLimit =
     params.platform === "x" ? X_CHAR_LIMIT : LINKEDIN_CHAR_LIMIT;
@@ -63,7 +70,7 @@ export function buildOriginalPostPrompt(params: {
   return `You are ghostwriting an original ${params.platform === "x" ? "tweet" : "LinkedIn post"} for someone with this voice:
 
 ${serializeProfile(params.personality)}
-
+${instructionsBlock(params.replyInstructions)}
 Topic: ${params.topic}
 ${params.additionalContext ? `Additional context: ${params.additionalContext}` : ""}
 
@@ -87,6 +94,7 @@ export function buildQuotePrompt(params: {
   recentPosts: string[];
   platform: "x" | "linkedin";
   count: number;
+  replyInstructions?: string | null;
 }) {
   const charLimit =
     params.platform === "x" ? X_CHAR_LIMIT : LINKEDIN_CHAR_LIMIT;
@@ -94,7 +102,7 @@ export function buildQuotePrompt(params: {
   return `You are ghostwriting a quote-${params.platform === "x" ? "tweet" : "post"} commentary for someone with this voice:
 
 ${serializeProfile(params.personality)}
-
+${instructionsBlock(params.replyInstructions)}
 They are quote-sharing this post by @${params.targetAuthor}:
 "${params.targetPost}"
 

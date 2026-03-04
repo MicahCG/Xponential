@@ -44,6 +44,7 @@ export const updateProfileSchema = z.object({
     x: z.record(z.string(), z.unknown()).optional(),
     linkedin: z.record(z.string(), z.unknown()).optional(),
   }).optional(),
+  replyInstructions: z.string().max(1000).optional(),
 });
 
 // Content validators
