@@ -27,6 +27,7 @@ model User {
   postHistory         PostHistory[]
   contentQueue        ContentQueue[]
   watchedAccounts     WatchedAccount[]
+  autoReplyLogs       AutoReplyLog[]
 
   @@map("users")
 }
@@ -90,6 +91,7 @@ model OAuthState {
   userId       String   @map("user_id")
   platform     Platform
   codeVerifier String?  @map("code_verifier")
+  returnTo     String?  @map("return_to")
   expiresAt    DateTime @map("expires_at")
   createdAt    DateTime @default(now()) @map("created_at")
 
@@ -199,20 +201,44 @@ model ContentQueue {
 }
 
 model WatchedAccount {
-  id             String   @id @default(cuid())
-  userId         String   @map("user_id")
-  platform       Platform
-  accountHandle  String   @map("account_handle")
-  accountId      String?  @map("account_id")
-  followersCount Int?     @map("followers_count")
-  isRecommended  Boolean  @default(false) @map("is_recommended")
-  isEnabled      Boolean  @default(false) @map("is_enabled")
-  replyCount     Int      @default(0) @map("reply_count")
-  category       String?
-  createdAt      DateTime @default(now()) @map("created_at")
+  id                 String   @id @default(cuid())
+  userId             String   @map("user_id")
+  platform           Platform
+  accountHandle      String   @map("account_handle")
+  accountId          String?  @map("account_id")
+  followersCount     Int?     @map("followers_count")
+  isRecommended      Boolean  @default(false) @map("is_recommended")
+  isEnabled          Boolean  @default(false) @map("is_enabled")
+  replyCount         Int      @default(0) @map("reply_count")
+  replyMode          String   @default("manual") @map("reply_mode")
+  lastCheckedTweetId String?  @map("last_checked_tweet_id")
+  category           String?
+  createdAt          DateTime @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  autoReplyLogs AutoReplyLog[]
 
   @@unique([userId, platform, accountHandle])
   @@map("watched_accounts")
+}
+
+model AutoReplyLog {
+  id               String    @id @default(cuid())
+  userId           String    @map("user_id")
+  watchedAccountId String    @map("watched_account_id")
+  targetTweetId    String    @map("target_tweet_id")
+  targetTweetText  String    @map("target_tweet_text") @db.Text
+  targetAuthor     String    @map("target_author")
+  replyContent     String    @map("reply_content") @db.Text
+  replyType        String    @default("text") @map("reply_type")
+  replyTweetId     String?   @map("reply_tweet_id")
+  status           String    @default("pending")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  postedAt         DateTime? @map("posted_at")
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  watchedAccount WatchedAccount @relation(fields: [watchedAccountId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("auto_reply_logs")
 }

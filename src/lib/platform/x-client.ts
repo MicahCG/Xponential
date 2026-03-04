@@ -236,6 +236,34 @@ export async function getUserFollowing(
   }));
 }
 
+/**
+ * Fetch recent tweets from a specific account (not the authenticated user).
+ * Optionally pass sinceId to only get tweets newer than that ID.
+ */
+export async function getAccountRecentTweets(
+  accessToken: string,
+  accountId: string,
+  sinceId?: string
+) {
+  const client = createXClient(accessToken);
+  const params: Record<string, unknown> = {
+    max_results: 10,
+    exclude: ["retweets", "replies"],
+    "tweet.fields": ["created_at", "text", "author_id"],
+  };
+
+  if (sinceId) {
+    params.since_id = sinceId;
+  }
+
+  const timeline = await client.v2.userTimeline(accountId, params as Parameters<typeof client.v2.userTimeline>[1]);
+  return (timeline.data.data ?? []).map((tweet) => ({
+    id: tweet.id,
+    text: tweet.text,
+    createdAt: tweet.created_at,
+  }));
+}
+
 export async function postTweet(
   accessToken: string,
   text: string,

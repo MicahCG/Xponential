@@ -9,7 +9,7 @@ import {
   LayoutDashboard,
   Link2,
   Brain,
-  PenTool,
+  MessageSquareReply,
   History,
   Settings,
   PanelLeftClose,
@@ -20,7 +20,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/connections", label: "Connections", icon: Link2 },
   { href: "/personality", label: "Personality", icon: Brain },
-  { href: "/content", label: "Content", icon: PenTool },
+  { href: "/content", label: "Auto-Replies", icon: MessageSquareReply },
   { href: "/content/history", label: "History", icon: History },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

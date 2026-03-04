@@ -43,6 +43,7 @@ export async function GET(
   }
 
   const userId = oauthState.userId;
+  const returnTo = oauthState.returnTo;
 
   // Delete the state record (single-use)
   await prisma.oAuthState.delete({ where: { id: oauthState.id } });
@@ -91,8 +92,9 @@ export async function GET(
         },
       });
 
+      const xRedirect = returnTo ?? "/connections";
       return NextResponse.redirect(
-        new URL("/connections?connected=x", request.url)
+        new URL(`${xRedirect}?connected=x`, request.url)
       );
     }
 
@@ -138,8 +140,9 @@ export async function GET(
         },
       });
 
+      const linkedinRedirect = returnTo ?? "/connections";
       return NextResponse.redirect(
-        new URL("/connections?connected=linkedin", request.url)
+        new URL(`${linkedinRedirect}?connected=linkedin`, request.url)
       );
     }
 

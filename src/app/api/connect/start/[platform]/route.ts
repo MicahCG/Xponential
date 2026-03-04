@@ -15,6 +15,8 @@ export async function GET(
 
   const { platform } = await params;
 
+  const returnTo = request.nextUrl.searchParams.get("returnTo") || null;
+
   if (platform === "x") {
     const clientId = process.env.X_CLIENT_ID!;
     const redirectUri = process.env.X_CALLBACK_URL!;
@@ -28,6 +30,7 @@ export async function GET(
         userId: session.user.id,
         platform: "x",
         codeVerifier,
+        returnTo,
         expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
       },
     });

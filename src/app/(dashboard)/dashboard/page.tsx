@@ -8,12 +8,18 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Link2, Brain, PenTool, History } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
+import { isSetupComplete } from "@/lib/setup-check";
 
 export default async function DashboardPage() {
   const session = await requireAuth();
-  const userId = session.user!.id;
+  const userId = session.user!.id!;
+
+  // Redirect to FTUE if setup is incomplete
+  const setupDone = await isSetupComplete(userId);
+  if (!setupDone) redirect("/setup");
 
   const [connections, profile, pendingCount, recentPosts] = await Promise.all([
     prisma.platformConnection.findMany({

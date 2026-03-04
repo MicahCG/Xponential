@@ -1,77 +1,591 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { GenerateForm } from "@/components/content/generate-form";
-import { QueueList } from "@/components/content/queue-list";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Loader2,
+  Twitter,
+  Plus,
+  Trash2,
+  MessageSquareReply,
+  Video,
+  Check,
+  Clock,
+  XCircle,
+  AlertCircle,
+  Sparkles,
+  Users,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { formatDistanceToNow } from "date-fns";
 
-export default function ContentPage() {
-  const [queueItems, setQueueItems] = useState<
-    {
-      id: string;
-      content: string;
-      platform: string;
-      postType: string;
-      status: string;
-      createdAt: string;
-    }[]
-  >([]);
+// ─── Types ──────────────────────────────────────────────────
 
-  const fetchQueue = useCallback(async () => {
-    const res = await fetch("/api/content/queue");
-    if (res.ok) {
-      const data = await res.json();
-      setQueueItems(data);
+interface WatchedAccount {
+  id: string;
+  accountHandle: string;
+  accountId: string | null;
+  followersCount: number | null;
+  isRecommended: boolean;
+  isEnabled: boolean;
+  replyCount: number;
+  replyMode: string;
+  category: string | null;
+}
+
+interface AutoReplyLog {
+  id: string;
+  targetTweetId: string;
+  targetTweetText: string;
+  targetAuthor: string;
+  replyContent: string;
+  replyType: string;
+  replyTweetId: string | null;
+  status: string;
+  createdAt: string;
+  postedAt: string | null;
+  watchedAccount: { accountHandle: string };
+}
+
+const MAX_ENABLED = 5;
+
+// ─── Main Page ──────────────────────────────────────────────
+
+export default function AutoReplyPage() {
+  const [accounts, setAccounts] = useState<WatchedAccount[]>([]);
+  const [replies, setReplies] = useState<AutoReplyLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newHandle, setNewHandle] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  const enabledCount = accounts.filter((a) => a.isEnabled).length;
+
+  // Split accounts into sections
+  const activeAccounts = accounts.filter((a) => a.isEnabled);
+  const recommendedInactive = accounts.filter(
+    (a) => !a.isEnabled && a.isRecommended
+  );
+  const engagedInactive = accounts.filter(
+    (a) => !a.isEnabled && !a.isRecommended
+  );
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [accountsRes, repliesRes] = await Promise.all([
+        fetch("/api/watched-accounts"),
+        fetch("/api/auto-replies"),
+      ]);
+
+      if (accountsRes.ok) {
+        const data = await accountsRes.json();
+        setAccounts(data.accounts);
+      }
+      if (repliesRes.ok) {
+        const data = await repliesRes.json();
+        setReplies(data.replies);
+      }
+    } catch {
+      // Silently fail — page still renders with empty state
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchQueue();
-  }, [fetchQueue]);
+    fetchData();
+  }, [fetchData]);
+
+  const handleToggle = async (id: string, isEnabled: boolean) => {
+    // Optimistic update
+    setAccounts((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, isEnabled } : a))
+    );
+
+    const res = await fetch(`/api/watched-accounts/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isEnabled }),
+    });
+
+    if (!res.ok) {
+      // Revert on error
+      setAccounts((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, isEnabled: !isEnabled } : a))
+      );
+    }
+  };
+
+  const handleModeChange = async (id: string, replyMode: string) => {
+    setAccounts((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, replyMode } : a))
+    );
+
+    await fetch(`/api/watched-accounts/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ replyMode }),
+    });
+  };
+
+  const handleRemove = async (id: string) => {
+    setAccounts((prev) => prev.filter((a) => a.id !== id));
+
+    await fetch(`/api/watched-accounts/${id}`, { method: "DELETE" });
+  };
+
+  const handleAdd = async () => {
+    const handle = newHandle.replace("@", "").trim();
+    if (!handle) return;
+
+    setAdding(true);
+    setAddError(null);
+
+    try {
+      const res = await fetch("/api/watched-accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ handle }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setAddError(data.error ?? "Failed to add account");
+        return;
+      }
+
+      setAccounts((prev) => [...prev, data.account]);
+      setNewHandle("");
+    } catch {
+      setAddError("Failed to add account");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleApprove = async (replyId: string) => {
+    setReplies((prev) =>
+      prev.map((r) => (r.id === replyId ? { ...r, status: "posting" } : r))
+    );
+
+    const res = await fetch(`/api/auto-replies/${replyId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "approve" }),
+    });
+
+    if (res.ok) {
+      setReplies((prev) =>
+        prev.map((r) => (r.id === replyId ? { ...r, status: "posted" } : r))
+      );
+    } else {
+      setReplies((prev) =>
+        prev.map((r) => (r.id === replyId ? { ...r, status: "failed" } : r))
+      );
+    }
+  };
+
+  const handleReject = async (replyId: string) => {
+    setReplies((prev) =>
+      prev.map((r) => (r.id === replyId ? { ...r, status: "rejected" } : r))
+    );
+
+    await fetch(`/api/auto-replies/${replyId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reject" }),
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Content</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Auto-Replies</h1>
         <p className="text-muted-foreground">
-          Generate and manage your content queue
+          Manage accounts your AI agent monitors and auto-replies to
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <GenerateForm
-          onGenerated={() => {
-            fetchQueue();
-          }}
+      {/* Active Auto-Reply Accounts */}
+      {activeAccounts.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquareReply className="h-5 w-5" />
+                <CardTitle className="text-lg">Active Auto-Replies</CardTitle>
+              </div>
+              <Badge variant="outline">
+                {enabledCount}/{MAX_ENABLED} slots used
+              </Badge>
+            </div>
+            <CardDescription>
+              Your agent is monitoring these accounts and replying when they post.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {activeAccounts.map((account) => (
+              <WatchedAccountCard
+                key={account.id}
+                account={account}
+                canEnable={true}
+                onToggle={(enabled) => handleToggle(account.id, enabled)}
+                onModeChange={(mode) => handleModeChange(account.id, mode)}
+                onRemove={() => handleRemove(account.id)}
+              />
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Recommended Accounts */}
+      {recommendedInactive.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5" />
+              <CardTitle className="text-lg">Recommended Accounts</CardTitle>
+            </div>
+            <CardDescription>
+              AI-suggested accounts based on your interests. Enable auto-reply to
+              grow your engagement and reach.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {recommendedInactive.map((account) => (
+              <WatchedAccountCard
+                key={account.id}
+                account={account}
+                canEnable={enabledCount < MAX_ENABLED}
+                onToggle={(enabled) => handleToggle(account.id, enabled)}
+                onModeChange={(mode) => handleModeChange(account.id, mode)}
+                onRemove={() => handleRemove(account.id)}
+              />
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Engaged Accounts (from reply history) */}
+      {engagedInactive.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              <CardTitle className="text-lg">Accounts You Engage With</CardTitle>
+            </div>
+            <CardDescription>
+              Based on your reply history. Enable auto-reply to keep the conversation going.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {engagedInactive.map((account) => (
+              <WatchedAccountCard
+                key={account.id}
+                account={account}
+                canEnable={enabledCount < MAX_ENABLED}
+                onToggle={(enabled) => handleToggle(account.id, enabled)}
+                onModeChange={(mode) => handleModeChange(account.id, mode)}
+                onRemove={() => handleRemove(account.id)}
+              />
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Empty state */}
+      {accounts.length === 0 && (
+        <Card>
+          <CardContent className="py-10 text-center">
+            <MessageSquareReply className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+            <p className="text-muted-foreground">
+              No watched accounts yet. Add an X account below or complete setup to get recommendations.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Add Account */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Add Account</CardTitle>
+          <CardDescription>
+            Add an X account to monitor ({enabledCount}/{MAX_ENABLED} active)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-3">
+            <div className="relative flex-1">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                @
+              </span>
+              <Input
+                value={newHandle}
+                onChange={(e) => {
+                  setNewHandle(e.target.value);
+                  setAddError(null);
+                }}
+                placeholder="username"
+                className="pl-8"
+                onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+                disabled={adding}
+              />
+            </div>
+            <Button
+              onClick={handleAdd}
+              disabled={adding || !newHandle.trim() || enabledCount >= MAX_ENABLED}
+            >
+              {adding ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="mr-2 h-4 w-4" />
+              )}
+              Add
+            </Button>
+          </div>
+          {addError && (
+            <p className="mt-2 text-sm text-destructive">{addError}</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Recent Auto-Replies */}
+      {replies.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Recent Auto-Replies</CardTitle>
+            <CardDescription>
+              Latest replies generated by your AI agent
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {replies.map((reply) => (
+                <ReplyLogCard
+                  key={reply.id}
+                  reply={reply}
+                  onApprove={() => handleApprove(reply.id)}
+                  onReject={() => handleReject(reply.id)}
+                />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ─── Watched Account Card ───────────────────────────────────
+
+function WatchedAccountCard({
+  account,
+  canEnable,
+  onToggle,
+  onModeChange,
+  onRemove,
+}: {
+  account: WatchedAccount;
+  canEnable: boolean;
+  onToggle: (enabled: boolean) => void;
+  onModeChange: (mode: string) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-4 py-4">
+        <Twitter className="h-5 w-5 shrink-0 text-muted-foreground" />
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-medium">@{account.accountHandle}</span>
+            {account.category && (
+              <Badge variant="secondary" className="text-xs">
+                {account.category}
+              </Badge>
+            )}
+            {account.isRecommended && !account.isEnabled && (
+              <Badge variant="outline" className="gap-1 text-xs text-purple-600 border-purple-200 dark:text-purple-400 dark:border-purple-800">
+                <Sparkles className="h-2.5 w-2.5" />
+                Recommended
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            {account.followersCount != null && (
+              <span>{account.followersCount.toLocaleString()} followers</span>
+            )}
+            {account.replyCount > 0 && (
+              <>
+                <span>&middot;</span>
+                <span>You replied {account.replyCount} times</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Reply Type badges */}
+        <div className="flex items-center gap-1">
+          <Badge variant="outline" className="gap-1 text-xs">
+            <MessageSquareReply className="h-3 w-3" />
+            Text
+          </Badge>
+          <Badge
+            variant="outline"
+            className="gap-1 text-xs opacity-40"
+            title="Coming soon"
+          >
+            <Video className="h-3 w-3" />
+            Video
+          </Badge>
+        </div>
+
+        {/* Mode selector */}
+        <Select
+          value={account.replyMode}
+          onValueChange={onModeChange}
+          disabled={!account.isEnabled}
+        >
+          <SelectTrigger className="w-28">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="manual">Manual</SelectItem>
+            <SelectItem value="auto">Auto</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Toggle */}
+        <Switch
+          checked={account.isEnabled}
+          onCheckedChange={onToggle}
+          disabled={!canEnable && !account.isEnabled}
         />
 
-        <div>
-          <Tabs defaultValue="pending">
-            <TabsList className="mb-4">
-              <TabsTrigger value="pending">
-                Pending ({queueItems.filter((i) => i.status === "pending").length})
-              </TabsTrigger>
-              <TabsTrigger value="approved">
-                Approved ({queueItems.filter((i) => i.status === "approved").length})
-              </TabsTrigger>
-              <TabsTrigger value="all">All</TabsTrigger>
-            </TabsList>
-            <TabsContent value="pending">
-              <QueueList
-                items={queueItems.filter((i) => i.status === "pending")}
-              />
-            </TabsContent>
-            <TabsContent value="approved">
-              <QueueList
-                items={queueItems.filter((i) => i.status === "approved")}
-              />
-            </TabsContent>
-            <TabsContent value="all">
-              <QueueList items={queueItems} />
-            </TabsContent>
-          </Tabs>
+        {/* Remove */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+          onClick={onRemove}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Reply Log Card ─────────────────────────────────────────
+
+function ReplyLogCard({
+  reply,
+  onApprove,
+  onReject,
+}: {
+  reply: AutoReplyLog;
+  onApprove: () => void;
+  onReject: () => void;
+}) {
+  const statusConfig: Record<
+    string,
+    { icon: React.ReactNode; label: string; className: string }
+  > = {
+    posted: {
+      icon: <Check className="h-3 w-3" />,
+      label: "Posted",
+      className: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+    },
+    pending: {
+      icon: <Clock className="h-3 w-3" />,
+      label: "Pending",
+      className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300",
+    },
+    failed: {
+      icon: <XCircle className="h-3 w-3" />,
+      label: "Failed",
+      className: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+    },
+    rejected: {
+      icon: <XCircle className="h-3 w-3" />,
+      label: "Rejected",
+      className: "bg-muted text-muted-foreground",
+    },
+    posting: {
+      icon: <Loader2 className="h-3 w-3 animate-spin" />,
+      label: "Posting...",
+      className: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+    },
+  };
+
+  const status = statusConfig[reply.status] ?? statusConfig.pending;
+
+  return (
+    <div className="rounded-lg border p-3 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>@{reply.targetAuthor} tweeted</span>
+            <span>&middot;</span>
+            <span>
+              {formatDistanceToNow(new Date(reply.createdAt), {
+                addSuffix: true,
+              })}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
+            &ldquo;{reply.targetTweetText}&rdquo;
+          </p>
         </div>
+        <Badge className={cn("shrink-0 gap-1", status.className)}>
+          {status.icon}
+          {status.label}
+        </Badge>
       </div>
+
+      <div className="rounded-md bg-muted/50 p-2">
+        <p className="text-sm">
+          <span className="font-medium">Your reply:</span> {reply.replyContent}
+        </p>
+      </div>
+
+      {reply.status === "pending" && (
+        <div className="flex items-center gap-2 pt-1">
+          <Button size="sm" onClick={onApprove}>
+            <Check className="mr-1 h-3 w-3" />
+            Approve & Post
+          </Button>
+          <Button size="sm" variant="outline" onClick={onReject}>
+            <XCircle className="mr-1 h-3 w-3" />
+            Reject
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
