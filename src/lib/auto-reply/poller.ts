@@ -8,6 +8,7 @@ export interface PollResult {
   repliesGenerated: number;
   repliesPosted: number;
   errors: string[];
+  debug: string[];
 }
 
 /**
@@ -22,6 +23,7 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
     repliesGenerated: 0,
     repliesPosted: 0,
     errors: [],
+    debug: [],
   };
 
   // Get all enabled watched accounts grouped by user
@@ -81,10 +83,18 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
 
       try {
         // Fetch new tweets since last check
+        result.debug.push(
+          `@${account.accountHandle}: accountId=${account.accountId}, sinceId=${account.lastCheckedTweetId ?? "null (first run)"}`
+        );
+
         const tweets = await getAccountRecentTweets(
           accessToken,
           account.accountId,
           account.lastCheckedTweetId ?? undefined
+        );
+
+        result.debug.push(
+          `@${account.accountHandle}: ${tweets.length} tweets found`
         );
 
         if (tweets.length === 0) continue;

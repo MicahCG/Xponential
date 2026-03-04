@@ -266,8 +266,8 @@ export async function getAccountRecentTweets(
 ) {
   const client = createXClient(accessToken);
   const params: Record<string, unknown> = {
-    max_results: 10,
-    exclude: ["retweets", "replies"],
+    max_results: 50,
+    exclude: ["retweets"],
     "tweet.fields": ["created_at", "text", "author_id"],
   };
 
