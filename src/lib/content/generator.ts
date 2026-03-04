@@ -1,4 +1,4 @@
-import { anthropic } from "@/lib/claude";
+import { openai } from "@/lib/openai";
 import { prisma } from "@/lib/prisma";
 import type { PersonalityProfile } from "@/lib/personality/types";
 import type { GenerateRequest, GeneratedContent } from "./types";
@@ -119,27 +119,34 @@ export async function generateContent(
       break;
   }
 
-  const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-5-20250514",
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
     max_tokens: 2000,
-    system: GENERATION_SYSTEM_PROMPT,
-    messages: [{ role: "user", content: prompt }],
+    messages: [
+      { role: "system", content: GENERATION_SYSTEM_PROMPT },
+      { role: "user", content: prompt },
+    ],
     tools: [
       {
-        name: "submit_content_options",
-        description: "Submit the generated content options",
-        input_schema: CONTENT_OPTIONS_SCHEMA,
+        type: "function",
+        function: {
+          name: "submit_content_options",
+          description: "Submit the generated content options",
+          parameters: CONTENT_OPTIONS_SCHEMA,
+        },
       },
     ],
-    tool_choice: { type: "tool", name: "submit_content_options" },
+    tool_choice: { type: "function", function: { name: "submit_content_options" } },
   });
 
-  const toolUse = response.content.find((block) => block.type === "tool_use");
-  if (!toolUse || toolUse.type !== "tool_use") {
+  const toolCall = response.choices[0]?.message?.tool_calls?.[0];
+  if (!toolCall || toolCall.type !== "function") {
     throw new Error("Failed to generate content");
   }
 
-  const result = toolUse.input as { options: { content: string; reasoning: string }[] };
+  const result = JSON.parse(toolCall.function.arguments) as {
+    options: { content: string; reasoning: string }[];
+  };
 
   return result.options.map((opt) => ({
     content: opt.content,

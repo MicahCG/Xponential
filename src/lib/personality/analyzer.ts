@@ -1,4 +1,4 @@
-import { anthropic } from "@/lib/claude";
+import { openai } from "@/lib/openai";
 import type { AnalysisInput, PersonalityProfile } from "./types";
 import { PERSONALITY_PROFILE_SCHEMA } from "./types";
 import {
@@ -120,26 +120,31 @@ export async function analyzePersonality(
   const userMessage = formatInputForAnalysis(input);
   const isIngest = input.method === "ingest";
 
-  const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-5-20250514",
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
     max_tokens: 3000,
-    system: isIngest ? INGEST_SYSTEM_PROMPT : ANALYSIS_SYSTEM_PROMPT,
-    messages: [{ role: "user", content: userMessage }],
+    messages: [
+      { role: "system", content: isIngest ? INGEST_SYSTEM_PROMPT : ANALYSIS_SYSTEM_PROMPT },
+      { role: "user", content: userMessage },
+    ],
     tools: [
       {
-        name: "save_personality_profile",
-        description:
-          "Save the analyzed personality profile. Call this with the complete profile data.",
-        input_schema: PERSONALITY_PROFILE_SCHEMA,
+        type: "function",
+        function: {
+          name: "save_personality_profile",
+          description:
+            "Save the analyzed personality profile. Call this with the complete profile data.",
+          parameters: PERSONALITY_PROFILE_SCHEMA,
+        },
       },
     ],
-    tool_choice: { type: "tool", name: "save_personality_profile" },
+    tool_choice: { type: "function", function: { name: "save_personality_profile" } },
   });
 
-  const toolUse = response.content.find((block) => block.type === "tool_use");
-  if (!toolUse || toolUse.type !== "tool_use") {
+  const toolCall = response.choices[0]?.message?.tool_calls?.[0];
+  if (!toolCall || toolCall.type !== "function") {
     throw new Error("Failed to extract personality profile from analysis");
   }
 
-  return toolUse.input as unknown as PersonalityProfile;
+  return JSON.parse(toolCall.function.arguments) as PersonalityProfile;
 }

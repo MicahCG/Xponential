@@ -1,4 +1,4 @@
-import { anthropic } from "@/lib/claude";
+import { openai } from "@/lib/openai";
 import type { IngestedProfile } from "./scraper";
 
 export interface AccountRecommendation {
@@ -53,7 +53,6 @@ export async function getAccountRecommendations(
   // 1. Build engaged accounts from reply data
   const engagedAccounts: AccountRecommendation[] =
     ingestedData.topEngagedAccounts.map((account) => {
-      // Try to find additional info from following list
       const followingMatch = ingestedData.following.find(
         (f) => f.username.toLowerCase() === account.username.toLowerCase()
       );
@@ -66,15 +65,14 @@ export async function getAccountRecommendations(
       };
     });
 
-  // 2. Use Claude to recommend accounts from following list
-  // Filter out accounts already in engaged list
+  // 2. Use AI to recommend accounts from following list
   const engagedUsernames = new Set(
     engagedAccounts.map((a) => a.username.toLowerCase())
   );
   const candidateAccounts = ingestedData.following
     .filter((f) => !engagedUsernames.has(f.username.toLowerCase()))
     .sort((a, b) => b.followersCount - a.followersCount)
-    .slice(0, 50); // Top 50 by followers
+    .slice(0, 50);
 
   if (candidateAccounts.length === 0) {
     return { engagedAccounts, recommendedAccounts: [] };
@@ -106,30 +104,36 @@ Pick up to 10 accounts that would be the most valuable for auto-reply engagement
 Assign a category tag to each recommendation.`;
 
   try {
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-5-20250514",
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
       max_tokens: 1500,
-      system:
-        "You recommend X accounts for a user to set up auto-replies to. Pick accounts that align with their interests and would give them visibility.",
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        {
+          role: "system",
+          content:
+            "You recommend X accounts for a user to set up auto-replies to. Pick accounts that align with their interests and would give them visibility.",
+        },
+        { role: "user", content: prompt },
+      ],
       tools: [
         {
-          name: "submit_recommendations",
-          description: "Submit account recommendations",
-          input_schema: RECOMMENDATION_SCHEMA,
+          type: "function",
+          function: {
+            name: "submit_recommendations",
+            description: "Submit account recommendations",
+            parameters: RECOMMENDATION_SCHEMA,
+          },
         },
       ],
-      tool_choice: { type: "tool", name: "submit_recommendations" },
+      tool_choice: { type: "function", function: { name: "submit_recommendations" } },
     });
 
-    const toolUse = response.content.find(
-      (block) => block.type === "tool_use"
-    );
-    if (!toolUse || toolUse.type !== "tool_use") {
+    const toolCall = response.choices[0]?.message?.tool_calls?.[0];
+    if (!toolCall || toolCall.type !== "function") {
       return { engagedAccounts, recommendedAccounts: [] };
     }
 
-    const result = toolUse.input as {
+    const result = JSON.parse(toolCall.function.arguments) as {
       recommendations: {
         username: string;
         category: string;
@@ -155,7 +159,6 @@ Assign a category tag to each recommendation.`;
     return { engagedAccounts, recommendedAccounts };
   } catch (err) {
     console.error("Failed to generate recommendations:", err);
-    // Fallback: return top followed accounts by follower count
     const fallback: AccountRecommendation[] = candidateAccounts
       .slice(0, 10)
       .map((a) => ({
