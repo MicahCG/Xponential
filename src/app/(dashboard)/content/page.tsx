@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/select";
 import {
   Loader2,
-  Twitter,
   Plus,
   Trash2,
   MessageSquareReply,
@@ -29,12 +28,13 @@ import {
   Check,
   Clock,
   XCircle,
-  AlertCircle,
   Sparkles,
-  Users,
+  TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
+import { AnalyzeStep } from "@/components/setup/analyze-step";
+import { AccountsStep } from "@/components/setup/accounts-step";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -65,7 +65,19 @@ interface AutoReplyLog {
   watchedAccount: { accountHandle: string };
 }
 
-const MAX_ENABLED = 5;
+const MAX_ENABLED = 10;
+
+// ─── Sorting ─────────────────────────────────────────────────
+
+type SortBy = "engagement" | "followers";
+
+function sortAccounts(list: WatchedAccount[], by: SortBy): WatchedAccount[] {
+  return [...list].sort((a, b) =>
+    by === "followers"
+      ? (b.followersCount ?? -1) - (a.followersCount ?? -1)
+      : b.replyCount - a.replyCount
+  );
+}
 
 // ─── Main Page ──────────────────────────────────────────────
 
@@ -73,32 +85,45 @@ export default function AutoReplyPage() {
   const [accounts, setAccounts] = useState<WatchedAccount[]>([]);
   const [replies, setReplies] = useState<AutoReplyLog[]>([]);
   const [loading, setLoading] = useState(true);
+  // null = loading, false = no profile, true = has profile
+  const [hasProfile, setHasProfile] = useState<boolean | null>(null);
+  const [onboardingStep, setOnboardingStep] = useState<"analyze" | "select" | null>(null);
   const [newHandle, setNewHandle] = useState("");
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<SortBy>("engagement");
 
   const enabledCount = accounts.filter((a) => a.isEnabled).length;
 
-  // Split accounts into sections
-  const activeAccounts = accounts.filter((a) => a.isEnabled);
-  const recommendedInactive = accounts.filter(
-    (a) => !a.isEnabled && a.isRecommended
-  );
-  const engagedInactive = accounts.filter(
-    (a) => !a.isEnabled && !a.isRecommended
-  );
+  const activeAccounts = sortAccounts(accounts.filter((a) => a.isEnabled), sortBy);
+  const inactiveAccounts = sortAccounts(accounts.filter((a) => !a.isEnabled), sortBy);
 
   const fetchData = useCallback(async () => {
     try {
-      const [accountsRes, repliesRes] = await Promise.all([
+      const [accountsRes, repliesRes, profileRes] = await Promise.all([
         fetch("/api/watched-accounts"),
         fetch("/api/auto-replies"),
+        fetch("/api/personality/profile"),
       ]);
 
       if (accountsRes.ok) {
         const data = await accountsRes.json();
-        setAccounts(data.accounts);
+        const fetched: WatchedAccount[] = data.accounts ?? [];
+        setAccounts(fetched);
+
+        if (fetched.length === 0) {
+          // Always re-analyze when there are no watched accounts —
+          // this re-scrapes Twitter and regenerates recommendations
+          const profileOk = profileRes.ok;
+          const profile = profileOk ? await profileRes.json() : null;
+          setHasProfile(!!profile?.id);
+          setOnboardingStep("analyze");
+        } else {
+          setOnboardingStep(null);
+          setHasProfile(true);
+        }
       }
+
       if (repliesRes.ok) {
         const data = await repliesRes.json();
         setReplies(data.replies);
@@ -114,8 +139,14 @@ export default function AutoReplyPage() {
     fetchData();
   }, [fetchData]);
 
+  // Called when AccountsStep completes — re-fetch to enter populated view
+  const handleOnboardingComplete = useCallback(() => {
+    setLoading(true);
+    setOnboardingStep(null);
+    fetchData();
+  }, [fetchData]);
+
   const handleToggle = async (id: string, isEnabled: boolean) => {
-    // Optimistic update
     setAccounts((prev) =>
       prev.map((a) => (a.id === id ? { ...a, isEnabled } : a))
     );
@@ -127,10 +158,17 @@ export default function AutoReplyPage() {
     });
 
     if (!res.ok) {
-      // Revert on error
       setAccounts((prev) =>
         prev.map((a) => (a.id === id ? { ...a, isEnabled: !isEnabled } : a))
       );
+    } else {
+      // After disabling all accounts, check if we should show onboarding
+      const updated = accounts.map((a) =>
+        a.id === id ? { ...a, isEnabled } : a
+      );
+      if (updated.every((a) => !a.isEnabled)) {
+        setOnboardingStep("select");
+      }
     }
   };
 
@@ -138,7 +176,6 @@ export default function AutoReplyPage() {
     setAccounts((prev) =>
       prev.map((a) => (a.id === id ? { ...a, replyMode } : a))
     );
-
     await fetch(`/api/watched-accounts/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -150,7 +187,6 @@ export default function AutoReplyPage() {
     setAccounts((prev) =>
       prev.map((a) => (a.id === id ? { ...a, replyType } : a))
     );
-
     await fetch(`/api/watched-accounts/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -159,9 +195,13 @@ export default function AutoReplyPage() {
   };
 
   const handleRemove = async (id: string) => {
-    setAccounts((prev) => prev.filter((a) => a.id !== id));
-
+    const next = accounts.filter((a) => a.id !== id);
+    setAccounts(next);
     await fetch(`/api/watched-accounts/${id}`, { method: "DELETE" });
+
+    if (next.length === 0) {
+      setOnboardingStep(hasProfile ? "select" : "analyze");
+    }
   };
 
   const handleAdd = async () => {
@@ -186,6 +226,7 @@ export default function AutoReplyPage() {
 
       setAccounts((prev) => [...prev, data.account]);
       setNewHandle("");
+      setOnboardingStep(null);
     } catch {
       setAddError("Failed to add account");
     } finally {
@@ -204,22 +245,17 @@ export default function AutoReplyPage() {
       body: JSON.stringify({ action: "approve" }),
     });
 
-    if (res.ok) {
-      setReplies((prev) =>
-        prev.map((r) => (r.id === replyId ? { ...r, status: "posted" } : r))
-      );
-    } else {
-      setReplies((prev) =>
-        prev.map((r) => (r.id === replyId ? { ...r, status: "failed" } : r))
-      );
-    }
+    setReplies((prev) =>
+      prev.map((r) =>
+        r.id === replyId ? { ...r, status: res.ok ? "posted" : "failed" } : r
+      )
+    );
   };
 
   const handleReject = async (replyId: string) => {
     setReplies((prev) =>
       prev.map((r) => (r.id === replyId ? { ...r, status: "rejected" } : r))
     );
-
     await fetch(`/api/auto-replies/${replyId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -235,6 +271,32 @@ export default function AutoReplyPage() {
     );
   }
 
+  // ─── Onboarding / Empty State ──────────────────────────────
+
+  if (onboardingStep !== null) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Auto-Replies</h1>
+          <p className="text-muted-foreground">
+            Manage accounts your AI agent monitors and auto-replies to
+          </p>
+        </div>
+
+        <div className="py-4">
+          {onboardingStep === "analyze" && (
+            <AnalyzeStep onComplete={() => setOnboardingStep("select")} />
+          )}
+          {onboardingStep === "select" && (
+            <AccountsStep onComplete={handleOnboardingComplete} />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Populated State ───────────────────────────────────────
+
   return (
     <div className="space-y-6">
       <div>
@@ -244,7 +306,34 @@ export default function AutoReplyPage() {
         </p>
       </div>
 
-      {/* Active Auto-Reply Accounts */}
+      {/* Add Account — inline at top */}
+      <div className="flex gap-3 items-center">
+        <div className="relative flex-1 max-w-sm">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">@</span>
+          <Input
+            value={newHandle}
+            onChange={(e) => { setNewHandle(e.target.value); setAddError(null); }}
+            placeholder="Add account by username"
+            className="pl-8"
+            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+            disabled={adding}
+          />
+        </div>
+        <Button
+          onClick={handleAdd}
+          disabled={adding || !newHandle.trim() || enabledCount >= MAX_ENABLED}
+          size="sm"
+        >
+          {adding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+          Add
+        </Button>
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
+          {enabledCount}/{MAX_ENABLED} active
+        </span>
+        {addError && <p className="text-sm text-destructive">{addError}</p>}
+      </div>
+
+      {/* Active accounts — sorted */}
       {activeAccounts.length > 0 && (
         <Card>
           <CardHeader>
@@ -269,9 +358,7 @@ export default function AutoReplyPage() {
                 canEnable={true}
                 onToggle={(enabled) => handleToggle(account.id, enabled)}
                 onModeChange={(mode) => handleModeChange(account.id, mode)}
-                onReplyTypeChange={(type) =>
-                  handleReplyTypeChange(account.id, type)
-                }
+                onReplyTypeChange={(type) => handleReplyTypeChange(account.id, type)}
                 onRemove={() => handleRemove(account.id)}
               />
             ))}
@@ -279,122 +366,44 @@ export default function AutoReplyPage() {
         </Card>
       )}
 
-      {/* Recommended Accounts */}
-      {recommendedInactive.length > 0 && (
+      {/* Inactive accounts — unified sorted list */}
+      {inactiveAccounts.length > 0 && (
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5" />
-              <CardTitle className="text-lg">Recommended Accounts</CardTitle>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5" />
+                <CardTitle className="text-lg">Suggested Accounts</CardTitle>
+              </div>
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortBy)}>
+                <SelectTrigger className="w-44 h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="engagement">My engagement</SelectItem>
+                  <SelectItem value="followers">Follower count</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <CardDescription>
-              AI-suggested accounts based on your interests. Enable auto-reply to
-              grow your engagement and reach.
+              Enable up to {MAX_ENABLED} total.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {recommendedInactive.map((account) => (
+            {inactiveAccounts.map((account) => (
               <WatchedAccountCard
                 key={account.id}
                 account={account}
                 canEnable={enabledCount < MAX_ENABLED}
                 onToggle={(enabled) => handleToggle(account.id, enabled)}
                 onModeChange={(mode) => handleModeChange(account.id, mode)}
-                onReplyTypeChange={(type) =>
-                  handleReplyTypeChange(account.id, type)
-                }
+                onReplyTypeChange={(type) => handleReplyTypeChange(account.id, type)}
                 onRemove={() => handleRemove(account.id)}
               />
             ))}
           </CardContent>
         </Card>
       )}
-
-      {/* Engaged Accounts (from reply history) */}
-      {engagedInactive.length > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              <CardTitle className="text-lg">Accounts You Engage With</CardTitle>
-            </div>
-            <CardDescription>
-              Based on your reply history. Enable auto-reply to keep the conversation going.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {engagedInactive.map((account) => (
-              <WatchedAccountCard
-                key={account.id}
-                account={account}
-                canEnable={enabledCount < MAX_ENABLED}
-                onToggle={(enabled) => handleToggle(account.id, enabled)}
-                onModeChange={(mode) => handleModeChange(account.id, mode)}
-                onReplyTypeChange={(type) =>
-                  handleReplyTypeChange(account.id, type)
-                }
-                onRemove={() => handleRemove(account.id)}
-              />
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Empty state */}
-      {accounts.length === 0 && (
-        <Card>
-          <CardContent className="py-10 text-center">
-            <MessageSquareReply className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-            <p className="text-muted-foreground">
-              No watched accounts yet. Add an X account below or complete setup to get recommendations.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Add Account */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Add Account</CardTitle>
-          <CardDescription>
-            Add an X account to monitor ({enabledCount}/{MAX_ENABLED} active)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-3">
-            <div className="relative flex-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                @
-              </span>
-              <Input
-                value={newHandle}
-                onChange={(e) => {
-                  setNewHandle(e.target.value);
-                  setAddError(null);
-                }}
-                placeholder="username"
-                className="pl-8"
-                onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-                disabled={adding}
-              />
-            </div>
-            <Button
-              onClick={handleAdd}
-              disabled={adding || !newHandle.trim() || enabledCount >= MAX_ENABLED}
-            >
-              {adding ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="mr-2 h-4 w-4" />
-              )}
-              Add
-            </Button>
-          </div>
-          {addError && (
-            <p className="mt-2 text-sm text-destructive">{addError}</p>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Recent Auto-Replies */}
       {replies.length > 0 && (
@@ -423,7 +432,7 @@ export default function AutoReplyPage() {
   );
 }
 
-// ─── Watched Account Card ───────────────────────────────────
+// ─── Watched Account Card ────────────────────────────────────
 
 function WatchedAccountCard({
   account,
@@ -443,10 +452,8 @@ function WatchedAccountCard({
   return (
     <Card>
       <CardContent className="flex items-center gap-4 py-4">
-        <Twitter className="h-5 w-5 shrink-0 text-muted-foreground" />
-
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium">@{account.accountHandle}</span>
             {account.category && (
               <Badge variant="secondary" className="text-xs">
@@ -456,18 +463,18 @@ function WatchedAccountCard({
             {account.isRecommended && !account.isEnabled && (
               <Badge variant="outline" className="gap-1 text-xs text-purple-600 border-purple-200 dark:text-purple-400 dark:border-purple-800">
                 <Sparkles className="h-2.5 w-2.5" />
-                Recommended
+                AI Pick
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
             {account.followersCount != null && (
               <span>{account.followersCount.toLocaleString()} followers</span>
             )}
             {account.replyCount > 0 && (
               <>
-                <span>&middot;</span>
-                <span>You replied {account.replyCount} times</span>
+                {account.followersCount != null && <span>&middot;</span>}
+                <span>{account.replyCount} replies from you</span>
               </>
             )}
           </div>
@@ -532,7 +539,7 @@ function WatchedAccountCard({
   );
 }
 
-// ─── Reply Log Card ─────────────────────────────────────────
+// ─── Reply Log Card ──────────────────────────────────────────
 
 function ReplyLogCard({
   reply,
