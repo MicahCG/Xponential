@@ -8,12 +8,6 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ platform: string }> }
 ) {
-  const userId = request.cookies.get("oauth_user_id")?.value;
-  if (!userId) {
-    console.error("OAuth callback: missing oauth_user_id cookie");
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
-
   const { platform } = await params;
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get("code");
@@ -32,12 +26,30 @@ export async function GET(
     );
   }
 
+  // Look up OAuth state from database instead of cookies
+  const oauthState = await prisma.oAuthState.findUnique({
+    where: { state },
+  });
+
+  if (!oauthState || oauthState.expiresAt < new Date()) {
+    // Clean up expired state if found
+    if (oauthState) {
+      await prisma.oAuthState.delete({ where: { id: oauthState.id } });
+    }
+    console.error("OAuth callback: invalid or expired state");
+    return NextResponse.redirect(
+      new URL("/connections?error=invalid_state", request.url)
+    );
+  }
+
+  const userId = oauthState.userId;
+
+  // Delete the state record (single-use)
+  await prisma.oAuthState.delete({ where: { id: oauthState.id } });
+
   try {
     if (platform === "x") {
-      const storedState = request.cookies.get("x_oauth_state")?.value;
-      const codeVerifier = request.cookies.get("x_code_verifier")?.value;
-
-      if (!storedState || state !== storedState || !codeVerifier) {
+      if (oauthState.platform !== "x" || !oauthState.codeVerifier) {
         return NextResponse.redirect(
           new URL("/connections?error=invalid_state", request.url)
         );
@@ -45,7 +57,7 @@ export async function GET(
 
       const tokens = await xOAuth.exchangeCode({
         code,
-        codeVerifier,
+        codeVerifier: oauthState.codeVerifier,
         clientId: process.env.X_CLIENT_ID!,
         clientSecret: process.env.X_CLIENT_SECRET!,
         redirectUri: process.env.X_CALLBACK_URL!,
@@ -79,19 +91,13 @@ export async function GET(
         },
       });
 
-      const response = NextResponse.redirect(
+      return NextResponse.redirect(
         new URL("/connections?connected=x", request.url)
       );
-      response.cookies.delete("x_oauth_state");
-      response.cookies.delete("x_code_verifier");
-      response.cookies.delete("oauth_user_id");
-      return response;
     }
 
     if (platform === "linkedin") {
-      const storedState = request.cookies.get("linkedin_oauth_state")?.value;
-
-      if (!storedState || state !== storedState) {
+      if (oauthState.platform !== "linkedin") {
         return NextResponse.redirect(
           new URL("/connections?error=invalid_state", request.url)
         );
@@ -132,12 +138,9 @@ export async function GET(
         },
       });
 
-      const response = NextResponse.redirect(
+      return NextResponse.redirect(
         new URL("/connections?connected=linkedin", request.url)
       );
-      response.cookies.delete("linkedin_oauth_state");
-      response.cookies.delete("oauth_user_id");
-      return response;
     }
 
     return NextResponse.redirect(

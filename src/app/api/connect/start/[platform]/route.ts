@@ -1,19 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import * as xOAuth from "@/lib/oauth/x";
 import * as linkedinOAuth from "@/lib/oauth/linkedin";
-
-const cookieOptions = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax" as const,
-  maxAge: 600,
-  path: "/",
-};
-
-function htmlRedirect(url: string) {
-  return `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${url}"></head><body>Redirecting...</body></html>`;
-}
 
 export async function GET(
   request: NextRequest,
@@ -32,6 +21,17 @@ export async function GET(
     const state = xOAuth.generateState();
     const { codeVerifier, codeChallenge } = xOAuth.generatePKCE();
 
+    // Store OAuth state in database (cookies are unreliable across redirects)
+    await prisma.oAuthState.create({
+      data: {
+        state,
+        userId: session.user.id,
+        platform: "x",
+        codeVerifier,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+      },
+    });
+
     const authUrl = xOAuth.buildAuthUrl({
       clientId,
       redirectUri,
@@ -39,14 +39,7 @@ export async function GET(
       codeChallenge,
     });
 
-    const response = new NextResponse(htmlRedirect(authUrl), {
-      status: 200,
-      headers: { "Content-Type": "text/html" },
-    });
-    response.cookies.set("oauth_user_id", session.user.id, cookieOptions);
-    response.cookies.set("x_oauth_state", state, cookieOptions);
-    response.cookies.set("x_code_verifier", codeVerifier, cookieOptions);
-    return response;
+    return NextResponse.redirect(authUrl);
   }
 
   if (platform === "linkedin") {
@@ -54,19 +47,22 @@ export async function GET(
     const redirectUri = process.env.LINKEDIN_CALLBACK_URL!;
     const state = linkedinOAuth.generateState();
 
+    await prisma.oAuthState.create({
+      data: {
+        state,
+        userId: session.user.id,
+        platform: "linkedin",
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      },
+    });
+
     const authUrl = linkedinOAuth.buildAuthUrl({
       clientId,
       redirectUri,
       state,
     });
 
-    const response = new NextResponse(htmlRedirect(authUrl), {
-      status: 200,
-      headers: { "Content-Type": "text/html" },
-    });
-    response.cookies.set("oauth_user_id", session.user.id, cookieOptions);
-    response.cookies.set("linkedin_oauth_state", state, cookieOptions);
-    return response;
+    return NextResponse.redirect(authUrl);
   }
 
   return NextResponse.json(

@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { TwitterApi } from "twitter-api-v2";
 
 const X_AUTH_URL = "https://twitter.com/i/oauth2/authorize";
 const X_TOKEN_URL = "https://api.twitter.com/2/oauth2/token";
@@ -43,36 +44,24 @@ export async function exchangeCode(params: {
   clientSecret: string;
   redirectUri: string;
 }) {
-  const basicAuth = Buffer.from(
-    `${params.clientId}:${params.clientSecret}`
-  ).toString("base64");
-
-  const res = await fetch(X_TOKEN_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Basic ${basicAuth}`,
-    },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code: params.code,
-      redirect_uri: params.redirectUri,
-      code_verifier: params.codeVerifier,
-    }),
+  const client = new TwitterApi({
+    clientId: params.clientId,
+    clientSecret: params.clientSecret,
   });
 
-  if (!res.ok) {
-    const error = await res.text();
-    throw new Error(`X token exchange failed: ${error}`);
-  }
+  const result = await client.loginWithOAuth2({
+    code: params.code,
+    codeVerifier: params.codeVerifier,
+    redirectUri: params.redirectUri,
+  });
 
-  return res.json() as Promise<{
-    access_token: string;
-    refresh_token: string;
-    expires_in: number;
-    token_type: string;
-    scope: string;
-  }>;
+  return {
+    access_token: result.accessToken,
+    refresh_token: result.refreshToken!,
+    expires_in: result.expiresIn,
+    token_type: "bearer",
+    scope: result.scope.join(" "),
+  };
 }
 
 export async function refreshAccessToken(params: {
@@ -80,32 +69,18 @@ export async function refreshAccessToken(params: {
   clientId: string;
   clientSecret: string;
 }) {
-  const basicAuth = Buffer.from(
-    `${params.clientId}:${params.clientSecret}`
-  ).toString("base64");
-
-  const res = await fetch(X_TOKEN_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Basic ${basicAuth}`,
-    },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: params.refreshToken,
-    }),
+  const client = new TwitterApi({
+    clientId: params.clientId,
+    clientSecret: params.clientSecret,
   });
 
-  if (!res.ok) {
-    const error = await res.text();
-    throw new Error(`X token refresh failed: ${error}`);
-  }
+  const result = await client.refreshOAuth2Token(params.refreshToken);
 
-  return res.json() as Promise<{
-    access_token: string;
-    refresh_token: string;
-    expires_in: number;
-  }>;
+  return {
+    access_token: result.accessToken,
+    refresh_token: result.refreshToken!,
+    expires_in: result.expiresIn,
+  };
 }
 
 export async function revokeToken(params: {
@@ -113,19 +88,10 @@ export async function revokeToken(params: {
   clientId: string;
   clientSecret: string;
 }) {
-  const basicAuth = Buffer.from(
-    `${params.clientId}:${params.clientSecret}`
-  ).toString("base64");
-
-  await fetch(X_REVOKE_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Basic ${basicAuth}`,
-    },
-    body: new URLSearchParams({
-      token: params.token,
-      token_type_hint: "access_token",
-    }),
+  const client = new TwitterApi({
+    clientId: params.clientId,
+    clientSecret: params.clientSecret,
   });
+
+  await client.revokeOAuth2Token(params.token, "access_token");
 }
