@@ -268,7 +268,8 @@ export async function getAccountRecentTweets(
   const params: Record<string, unknown> = {
     max_results: 50,
     exclude: ["retweets"],
-    "tweet.fields": ["created_at", "text", "author_id"],
+    "tweet.fields": ["created_at", "text", "author_id", "referenced_tweets"],
+    expansions: ["referenced_tweets.id"],
   };
 
   if (sinceId) {
@@ -276,11 +277,23 @@ export async function getAccountRecentTweets(
   }
 
   const timeline = await client.v2.userTimeline(accountId, params as Parameters<typeof client.v2.userTimeline>[1]);
-  return (timeline.data.data ?? []).map((tweet) => ({
-    id: tweet.id,
-    text: tweet.text,
-    createdAt: tweet.created_at,
-  }));
+
+  // Build a map of referenced tweets so we can include quoted tweet text
+  const refTweets = timeline.data.includes?.tweets ?? [];
+  const refMap = new Map(refTweets.map((t) => [t.id, t.text]));
+
+  return (timeline.data.data ?? []).map((tweet) => {
+    const quotedRef = tweet.referenced_tweets?.find((r) => r.type === "quoted");
+    const quotedText = quotedRef ? refMap.get(quotedRef.id) : undefined;
+
+    return {
+      id: tweet.id,
+      text: quotedText
+        ? `${tweet.text}\n\n[Quoted tweet]: ${quotedText}`
+        : tweet.text,
+      createdAt: tweet.created_at,
+    };
+  });
 }
 
 export async function postTweet(
