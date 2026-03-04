@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getValidAccessToken, getAccountRecentTweets, postTweet } from "@/lib/platform/x-client";
+import { getValidAccessToken, getAccountRecentTweets, getUsersByUsernames, postTweet } from "@/lib/platform/x-client";
 import { generateContent } from "@/lib/content/generator";
 
 export interface PollResult {
@@ -56,11 +56,27 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
     for (const account of userAccounts) {
       result.accountsChecked++;
 
+      // If accountId is missing, look it up and save it now
       if (!account.accountId) {
-        result.errors.push(
-          `@${account.accountHandle}: No account ID stored, skipping`
-        );
-        continue;
+        try {
+          const users = await getUsersByUsernames(accessToken, [account.accountHandle]);
+          if (!users.length) {
+            result.errors.push(`@${account.accountHandle}: Account not found on X, skipping`);
+            continue;
+          }
+          const { id, followersCount } = users[0];
+          await prisma.watchedAccount.update({
+            where: { id: account.id },
+            data: {
+              accountId: id,
+              ...(account.followersCount == null && { followersCount }),
+            },
+          });
+          account.accountId = id;
+        } catch {
+          result.errors.push(`@${account.accountHandle}: Could not resolve account ID, skipping`);
+          continue;
+        }
       }
 
       try {
