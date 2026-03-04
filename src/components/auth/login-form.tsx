@@ -15,13 +15,13 @@ export function LoginForm() {
     setError(null);
 
     const result = await signIn("credentials", {
-      email: formData.get("email") as string,
+      username: formData.get("username") as string,
       password: formData.get("password") as string,
       redirect: false,
     });
 
     if (result?.error) {
-      setError("Invalid email or password");
+      setError("Invalid username or password");
       setPending(false);
       return;
     }
@@ -37,12 +37,12 @@ export function LoginForm() {
         </div>
       )}
       <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="username">Username</Label>
         <Input
-          id="email"
-          name="email"
-          type="email"
-          placeholder="you@example.com"
+          id="username"
+          name="username"
+          type="text"
+          placeholder="Username"
           required
         />
       </div>

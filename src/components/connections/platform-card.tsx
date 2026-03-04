@@ -38,10 +38,6 @@ export function PlatformCard({
   const config = platformConfig[platform];
   const Icon = config.icon;
 
-  const handleConnect = () => {
-    window.location.href = `/api/connect/start/${platform}`;
-  };
-
   const handleDisconnect = async () => {
     setDisconnecting(true);
     try {
@@ -103,8 +99,10 @@ export function PlatformCard({
             </Button>
           </div>
         ) : (
-          <Button onClick={handleConnect}>
-            Connect {config.name}
+          <Button asChild>
+            <a href={`/api/connect/start/${platform}`}>
+              Connect {config.name}
+            </a>
           </Button>
         )}
       </CardContent>

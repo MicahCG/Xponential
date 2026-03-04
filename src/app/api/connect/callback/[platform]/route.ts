@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import * as xOAuth from "@/lib/oauth/x";
 import * as linkedinOAuth from "@/lib/oauth/linkedin";
 import { getUserProfile as getXProfile } from "@/lib/platform/x-client";
-import { cookies } from "next/headers";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ platform: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const userId = request.cookies.get("oauth_user_id")?.value;
+  if (!userId) {
+    console.error("OAuth callback: missing oauth_user_id cookie");
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
@@ -33,12 +32,10 @@ export async function GET(
     );
   }
 
-  const cookieStore = await cookies();
-
   try {
     if (platform === "x") {
-      const storedState = cookieStore.get("x_oauth_state")?.value;
-      const codeVerifier = cookieStore.get("x_code_verifier")?.value;
+      const storedState = request.cookies.get("x_oauth_state")?.value;
+      const codeVerifier = request.cookies.get("x_code_verifier")?.value;
 
       if (!storedState || state !== storedState || !codeVerifier) {
         return NextResponse.redirect(
@@ -59,7 +56,7 @@ export async function GET(
       await prisma.platformConnection.upsert({
         where: {
           userId_platform: {
-            userId: session.user.id,
+            userId,
             platform: "x",
           },
         },
@@ -72,7 +69,7 @@ export async function GET(
           status: "active",
         },
         create: {
-          userId: session.user.id,
+          userId,
           platform: "x",
           accessToken: tokens.access_token,
           refreshToken: tokens.refresh_token,
@@ -82,16 +79,17 @@ export async function GET(
         },
       });
 
-      cookieStore.delete("x_oauth_state");
-      cookieStore.delete("x_code_verifier");
-
-      return NextResponse.redirect(
+      const response = NextResponse.redirect(
         new URL("/connections?connected=x", request.url)
       );
+      response.cookies.delete("x_oauth_state");
+      response.cookies.delete("x_code_verifier");
+      response.cookies.delete("oauth_user_id");
+      return response;
     }
 
     if (platform === "linkedin") {
-      const storedState = cookieStore.get("linkedin_oauth_state")?.value;
+      const storedState = request.cookies.get("linkedin_oauth_state")?.value;
 
       if (!storedState || state !== storedState) {
         return NextResponse.redirect(
@@ -111,7 +109,7 @@ export async function GET(
       await prisma.platformConnection.upsert({
         where: {
           userId_platform: {
-            userId: session.user.id,
+            userId,
             platform: "linkedin",
           },
         },
@@ -124,7 +122,7 @@ export async function GET(
           status: "active",
         },
         create: {
-          userId: session.user.id,
+          userId,
           platform: "linkedin",
           accessToken: tokens.access_token,
           refreshToken: tokens.refresh_token ?? null,
@@ -134,11 +132,12 @@ export async function GET(
         },
       });
 
-      cookieStore.delete("linkedin_oauth_state");
-
-      return NextResponse.redirect(
+      const response = NextResponse.redirect(
         new URL("/connections?connected=linkedin", request.url)
       );
+      response.cookies.delete("linkedin_oauth_state");
+      response.cookies.delete("oauth_user_id");
+      return response;
     }
 
     return NextResponse.redirect(

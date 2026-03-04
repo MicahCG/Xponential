@@ -16,7 +16,7 @@ export function Header() {
     ?.split(" ")
     .map((n) => n[0])
     .join("")
-    .toUpperCase() ?? session?.user?.email?.[0]?.toUpperCase() ?? "?";
+    .toUpperCase() ?? "?";
 
   return (
     <header className="flex h-14 items-center justify-end border-b px-6">
@@ -27,7 +27,7 @@ export function Header() {
               <AvatarFallback className="text-xs">{initials}</AvatarFallback>
             </Avatar>
             <span className="text-sm font-medium">
-              {session?.user?.name ?? session?.user?.email}
+              {session?.user?.name ?? "User"}
             </span>
           </button>
         </DropdownMenuTrigger>
