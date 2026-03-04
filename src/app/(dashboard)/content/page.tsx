@@ -13,13 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Loader2,
   Plus,
   Trash2,
@@ -67,17 +60,7 @@ interface AutoReplyLog {
 
 const MAX_ENABLED = 10;
 
-// ─── Sorting & Formatting ─────────────────────────────────────
-
-type SortBy = "engagement" | "followers";
-
-function sortAccounts(list: WatchedAccount[], by: SortBy): WatchedAccount[] {
-  return [...list].sort((a, b) =>
-    by === "followers"
-      ? (b.followersCount ?? 0) - (a.followersCount ?? 0)
-      : b.replyCount - a.replyCount
-  );
-}
+// ─── Formatting ──────────────────────────────────────────────
 
 function formatFollowers(n: number | null): string {
   if (n == null) return "— followers";
@@ -98,12 +81,14 @@ export default function AutoReplyPage() {
   const [newHandle, setNewHandle] = useState("");
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<SortBy>("engagement");
-
   const enabledCount = accounts.filter((a) => a.isEnabled).length;
 
-  const activeAccounts = sortAccounts(accounts.filter((a) => a.isEnabled), sortBy);
-  const inactiveAccounts = sortAccounts(accounts.filter((a) => !a.isEnabled), sortBy);
+  const activeAccounts = [...accounts.filter((a) => a.isEnabled)].sort(
+    (a, b) => b.replyCount - a.replyCount
+  );
+  const inactiveAccounts = [...accounts.filter((a) => !a.isEnabled)].sort(
+    (a, b) => b.replyCount - a.replyCount
+  );
 
   const fetchData = useCallback(async () => {
     try {
@@ -377,20 +362,9 @@ export default function AutoReplyPage() {
       {inactiveAccounts.length > 0 && (
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5" />
-                <CardTitle className="text-lg">Suggested Accounts</CardTitle>
-              </div>
-              <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortBy)}>
-                <SelectTrigger className="w-44 h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="engagement">My engagement</SelectItem>
-                  <SelectItem value="followers">Follower count</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              <CardTitle className="text-lg">Suggested Accounts</CardTitle>
             </div>
             <CardDescription>
               Enable up to {MAX_ENABLED} total.
