@@ -498,18 +498,53 @@ export async function postTweet(
         });
       }
 
-      // Auth / token errors
-      if (error.isAuthError || error.code === 401 || error.code === 403) {
-        const isExpired = error.hasErrorCode(89); // InvalidOrExpiredToken
+      // 403 — distinguish between auth issues and conversation restrictions
+      if (error.code === 403) {
+        const detail = error.data?.detail || error.data?.error || error.message || "";
+        const isConversationRestricted =
+          detail.includes("Reply to this conversation is not allowed") ||
+          detail.includes("not allowed") ||
+          detail.includes("conversation");
         const noWriteRight = error.hasErrorCode(261); // NoWriteRightForApp
+
+        if (isConversationRestricted) {
+          // This is NOT an auth error — the tweet author restricted replies
+          throw new XPostError({
+            message: "Reply restricted — the tweet author limits who can reply. Your account isn't in the allowed list.",
+            httpCode: 403,
+            xErrorCode: firstErrorCode ?? null,
+            isAuthError: false,
+            rawErrors: errJson,
+          });
+        }
+
+        if (noWriteRight) {
+          throw new XPostError({
+            message: "Your X app does not have write permissions. Check your X Developer Portal app settings.",
+            httpCode: 403,
+            xErrorCode: 261,
+            isAuthError: true,
+            rawErrors: errJson,
+          });
+        }
+
+        // Other 403s — likely app permissions
+        throw new XPostError({
+          message: `X API forbidden (403): ${detail}`,
+          httpCode: 403,
+          xErrorCode: firstErrorCode ?? null,
+          isAuthError: true,
+          rawErrors: errJson,
+        });
+      }
+
+      // Auth / token errors (401 only)
+      if (error.isAuthError || error.code === 401) {
+        const isExpired = error.hasErrorCode(89); // InvalidOrExpiredToken
 
         let message = "X API authentication failed.";
         if (isExpired) {
           message = "X access token is expired or invalid. Please reconnect your X account.";
-        } else if (noWriteRight) {
-          message = "Your X app does not have write permissions. Check your X Developer Portal app settings.";
-        } else if (error.code === 403) {
-          message = `X API forbidden (403): ${error.data?.detail || error.data?.error || error.message}. This may be an app permissions issue.`;
         } else {
           message = `X API auth error (${error.code}): ${error.data?.detail || error.data?.error || error.message}`;
         }
