@@ -9,8 +9,14 @@ export async function PUT(
 ) {
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    console.error("[auto-reply approve] No session found — returning 401");
+    return NextResponse.json(
+      { error: "Session expired — please log in again", source: "session" },
+      { status: 401 }
+    );
   }
+
+  console.log(`[auto-reply approve] User ${session.user.id} attempting action`);
 
   const { id } = await params;
   const body = await request.json();
@@ -98,9 +104,18 @@ export async function PUT(
 
     // Build actionable error response
     if (error instanceof XPostError) {
+      console.error("[auto-reply approve] XPostError:", {
+        message: error.message,
+        httpCode: error.httpCode,
+        isAuth: error.isAuthError,
+        isRateLimit: error.isRateLimit,
+        isDuplicate: error.isDuplicate,
+        rawErrors: error.rawErrors,
+      });
       return NextResponse.json(
         {
           error: error.message,
+          source: "x_api",
           errorType: error.isAuthError
             ? "auth"
             : error.isRateLimit

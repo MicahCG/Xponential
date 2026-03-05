@@ -279,19 +279,27 @@ export default function AutoReplyPage() {
       });
 
       const data = await res.json();
+      console.log("[approve response]", res.status, data);
 
       if (!res.ok) {
         const errorMsg = data.error || "Failed to post reply";
+        const source = data.source as string | undefined;
         const errorType = data.errorType as string | undefined;
-        setApproveError(
-          errorType === "auth"
-            ? `Auth error: ${errorMsg}`
-            : errorType === "rate_limit"
-              ? `Rate limited: ${errorMsg}`
-              : errorType === "duplicate"
-                ? `Duplicate: ${errorMsg}`
-                : errorMsg
-        );
+
+        // If session expired, tell user to log in again
+        if (source === "session") {
+          setApproveError("Your session expired. Please refresh the page and log in again.");
+        } else {
+          setApproveError(
+            errorType === "auth"
+              ? `X API auth error: ${errorMsg}`
+              : errorType === "rate_limit"
+                ? `Rate limited: ${errorMsg}`
+                : errorType === "duplicate"
+                  ? `Duplicate: ${errorMsg}`
+                  : `Error: ${errorMsg}`
+          );
+        }
 
         // If retryable, keep as pending so user can try again
         setReplies((prev) =>
