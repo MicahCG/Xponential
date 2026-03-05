@@ -1,6 +1,7 @@
 import { TwitterApi, ApiResponseError, ApiRequestError } from "twitter-api-v2";
 import { prisma } from "@/lib/prisma";
 import { refreshAccessToken } from "@/lib/oauth/x";
+import { postTweetViaApify } from "./apify-poster";
 
 /**
  * Custom error class for X API posting failures.
@@ -131,37 +132,19 @@ export async function forceRefreshToken(userId: string): Promise<string> {
 }
 
 /**
- * Posts a tweet with automatic token refresh on 401.
- * If the first attempt fails with an auth error, forces a token refresh
- * and retries exactly once before giving up.
+ * Posts a tweet or reply via the Apify third-party actor.
+ *
+ * We use Apify instead of the official X API for write operations
+ * because the official API has restrictive write permissions.
+ * Reading (timelines, profiles, etc.) still uses the official API.
  */
 export async function postTweetWithRetry(
   userId: string,
   text: string,
-  replyToId?: string
+  replyToId?: string,
+  mediaUrl?: string
 ): Promise<{ id: string }> {
-  const accessToken = await getValidAccessToken(userId);
-
-  try {
-    return await postTweet(accessToken, text, replyToId);
-  } catch (error) {
-    // If auth error, force-refresh the token and retry once
-    if (error instanceof XPostError && error.isAuthError) {
-      console.log("[X API] Auth error on post — force-refreshing token and retrying...");
-
-      try {
-        const freshToken = await forceRefreshToken(userId);
-        return await postTweet(freshToken, text, replyToId);
-      } catch (retryError) {
-        // If retry also fails, throw that error
-        console.error("[X API] Retry after token refresh also failed:", retryError);
-        throw retryError;
-      }
-    }
-
-    // Non-auth errors: re-throw immediately
-    throw error;
-  }
+  return postTweetViaApify(userId, text, replyToId, mediaUrl);
 }
 
 export async function getUserProfile(accessToken: string) {
@@ -397,7 +380,7 @@ export async function getAccountRecentTweets(
 ) {
   const client = createXClient(accessToken);
   const params: Record<string, unknown> = {
-    max_results: 50,
+    max_results: 5,
     exclude: ["retweets"],
     "tweet.fields": ["created_at", "text", "author_id", "referenced_tweets"],
     expansions: ["referenced_tweets.id"],

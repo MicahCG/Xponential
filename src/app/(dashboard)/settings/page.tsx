@@ -1,3 +1,5 @@
+import { TwitterCookieForm } from "@/components/settings/twitter-cookie-form";
+
 export default function SettingsPage() {
   return (
     <div className="space-y-6">
@@ -7,7 +9,7 @@ export default function SettingsPage() {
           Manage your account and automation preferences
         </p>
       </div>
-      <p className="text-muted-foreground">Coming soon...</p>
+      <TwitterCookieForm />
     </div>
   );
 }

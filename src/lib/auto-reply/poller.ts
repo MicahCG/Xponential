@@ -101,15 +101,16 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
 
         result.newTweetsFound += tweets.length;
 
-        // Update lastCheckedTweetId to the newest tweet
+        // Update lastCheckedTweetId to the newest tweet so we skip all of them next poll
         const newestTweetId = tweets[0].id;
         await prisma.watchedAccount.update({
           where: { id: account.id },
           data: { lastCheckedTweetId: newestTweetId },
         });
 
-        // Generate and handle replies for each new tweet
-        for (const tweet of tweets) {
+        // Only reply to the single most recent tweet (tweets are reverse-chronological)
+        const tweetsToReply = [tweets[0]];
+        for (const tweet of tweetsToReply) {
           try {
             if (account.replyType === "video") {
               // For video replies, queue a pending log entry.

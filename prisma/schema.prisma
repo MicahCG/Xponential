@@ -99,16 +99,17 @@ model OAuthState {
 }
 
 model PlatformConnection {
-  id            String           @id @default(cuid())
-  userId        String           @map("user_id")
-  platform      Platform
-  accessToken   String           @map("access_token") @db.Text
-  refreshToken  String?          @map("refresh_token") @db.Text
-  accountHandle String?          @map("account_handle")
-  accountId     String?          @map("account_id")
-  connectedAt   DateTime         @default(now()) @map("connected_at")
-  tokenExpires  DateTime?        @map("token_expires")
-  status        ConnectionStatus @default(active)
+  id             String           @id @default(cuid())
+  userId         String           @map("user_id")
+  platform       Platform
+  accessToken    String           @map("access_token") @db.Text
+  refreshToken   String?          @map("refresh_token") @db.Text
+  twitterCookie  String?          @map("twitter_cookie") @db.Text
+  accountHandle  String?          @map("account_handle")
+  accountId      String?          @map("account_id")
+  connectedAt    DateTime         @default(now()) @map("connected_at")
+  tokenExpires   DateTime?        @map("token_expires")
+  status         ConnectionStatus @default(active)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

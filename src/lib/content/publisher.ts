@@ -33,7 +33,8 @@ export async function publishQueueItem(queueItemId: string, userId: string) {
     const result = await postTweetWithRetry(
       userId,
       item.content,
-      item.targetPostId ?? undefined
+      item.targetPostId ?? undefined,
+      item.videoUrl ?? undefined
     );
     platformPostId = result.id;
   } else if (item.platform === "linkedin") {
