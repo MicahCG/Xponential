@@ -92,9 +92,10 @@ export async function GET(
         },
       });
 
-      const xRedirect = returnTo ?? "/connections";
+      // Redirect to cookie setup page so users complete step 2
+      const xRedirect = returnTo ?? "/connections/x/cookie-setup";
       return NextResponse.redirect(
-        new URL(`${xRedirect}?connected=x`, request.url)
+        new URL(xRedirect, request.url)
       );
     }
 

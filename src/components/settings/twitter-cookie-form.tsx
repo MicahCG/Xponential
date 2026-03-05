@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -13,7 +14,13 @@ import {
 } from "@/components/ui/card";
 import { Loader2, Check, Trash2, Cookie } from "lucide-react";
 
-export function TwitterCookieForm() {
+interface TwitterCookieFormProps {
+  /** When set, redirect to this URL after a successful save instead of showing a success message */
+  onSaveRedirect?: string;
+}
+
+export function TwitterCookieForm({ onSaveRedirect }: TwitterCookieFormProps) {
+  const router = useRouter();
   const [cookie, setCookie] = useState("");
   const [hasCookie, setHasCookie] = useState(false);
   const [cookiePreview, setCookiePreview] = useState<string | null>(null);
@@ -63,6 +70,11 @@ export function TwitterCookieForm() {
 
       if (!res.ok) {
         setError(data.error ?? "Failed to save cookie");
+        return;
+      }
+
+      if (onSaveRedirect) {
+        router.push(onSaveRedirect);
         return;
       }
 

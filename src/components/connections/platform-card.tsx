@@ -10,7 +10,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Twitter, Linkedin, Loader2, Unlink } from "lucide-react";
+import { Twitter, Linkedin, Loader2, Unlink, AlertTriangle } from "lucide-react";
+import Link from "next/link";
 import type { PlatformConnectionInfo } from "@/types";
 import { formatDistanceToNow } from "date-fns";
 import { IngestButton } from "./ingest-button";
@@ -64,9 +65,15 @@ export function PlatformCard({
           <CardDescription>{config.description}</CardDescription>
         </div>
         {connection ? (
-          <Badge variant={connection.status === "active" ? "default" : "secondary"}>
-            {connection.status}
-          </Badge>
+          platform === "x" && connection.status === "active" && connection.hasCookie === false ? (
+            <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20">
+              Setup incomplete
+            </Badge>
+          ) : (
+            <Badge variant={connection.status === "active" ? "default" : "secondary"}>
+              {connection.status}
+            </Badge>
+          )
         ) : (
           <Badge variant="outline">Not connected</Badge>
         )}
@@ -100,6 +107,22 @@ export function PlatformCard({
                 Disconnect
               </Button>
             </div>
+            {platform === "x" && connection.status === "active" && connection.hasCookie === false && (
+              <div className="rounded-md bg-yellow-500/10 p-3 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-yellow-700 dark:text-yellow-400">
+                  <AlertTriangle className="h-4 w-4" />
+                  Cookie required to post tweets
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Your X account is linked, but posting won&apos;t work until you add your Twitter cookie.
+                </p>
+                <Button asChild size="sm">
+                  <Link href="/connections/x/cookie-setup">
+                    Complete Setup
+                  </Link>
+                </Button>
+              </div>
+            )}
             {platform === "x" && connection.status === "active" && (
               <IngestButton />
             )}

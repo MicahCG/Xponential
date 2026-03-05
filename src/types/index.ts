@@ -23,4 +23,6 @@ export interface PlatformConnectionInfo {
   accountHandle: string | null;
   connectedAt: Date;
   status: string;
+  /** Whether the Twitter cookie is configured (X connections only) */
+  hasCookie?: boolean;
 }

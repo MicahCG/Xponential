@@ -14,11 +14,22 @@ export default async function ConnectionsPage() {
       accountHandle: true,
       connectedAt: true,
       status: true,
+      twitterCookie: true,
     },
   });
 
   const connectionMap = Object.fromEntries(
-    connections.map((c) => [c.platform, c as PlatformConnectionInfo])
+    connections.map((c) => [
+      c.platform,
+      {
+        id: c.id,
+        platform: c.platform,
+        accountHandle: c.accountHandle,
+        connectedAt: c.connectedAt,
+        status: c.status,
+        hasCookie: c.platform === "x" ? !!c.twitterCookie : undefined,
+      } as PlatformConnectionInfo,
+    ])
   );
 
   return (
