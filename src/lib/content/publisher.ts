@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { postTweet, XPostError } from "@/lib/platform/x-client";
+import { postTweetWithRetry } from "@/lib/platform/x-client";
 import { createLinkedInPost } from "@/lib/platform/linkedin-client";
 
 export async function publishQueueItem(queueItemId: string, userId: string) {
@@ -30,8 +30,8 @@ export async function publishQueueItem(queueItemId: string, userId: string) {
   let platformPostId: string | undefined;
 
   if (item.platform === "x") {
-    const result = await postTweet(
-      connection.accessToken,
+    const result = await postTweetWithRetry(
+      userId,
       item.content,
       item.targetPostId ?? undefined
     );

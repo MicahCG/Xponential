@@ -67,13 +67,32 @@ export async function getValidAccessToken(userId: string): Promise<string> {
   }
 
   // Token is expired — refresh it
+  return forceRefreshToken(userId);
+}
+
+/**
+ * Force-refreshes the X access token regardless of expiry.
+ * Used when the stored token is rejected by X (401) even though
+ * our DB thinks it's still valid.
+ */
+export async function forceRefreshToken(userId: string): Promise<string> {
+  const connection = await prisma.platformConnection.findUnique({
+    where: {
+      userId_platform: { userId, platform: "x" },
+    },
+  });
+
+  if (!connection) {
+    throw new Error("X account not connected. Connect your X account first.");
+  }
+
   if (!connection.refreshToken) {
     throw new Error(
       "X token expired and no refresh token available. Please reconnect your X account."
     );
   }
 
-  console.log("X token expired, refreshing...");
+  console.log(`[X Auth] Force-refreshing token for user ${userId}...`);
 
   const clientId = process.env.X_CLIENT_ID!;
   const clientSecret = process.env.X_CLIENT_SECRET!;
@@ -92,13 +111,14 @@ export async function getValidAccessToken(userId: string): Promise<string> {
         accessToken: refreshed.access_token,
         refreshToken: refreshed.refresh_token,
         tokenExpires: new Date(Date.now() + refreshed.expires_in * 1000),
+        status: "active",
       },
     });
 
-    console.log("X token refreshed successfully");
+    console.log("[X Auth] Token refreshed successfully");
     return refreshed.access_token;
   } catch (err) {
-    console.error("Failed to refresh X token:", err);
+    console.error("[X Auth] Failed to refresh token:", err);
     // Mark connection as expired
     await prisma.platformConnection.update({
       where: { id: connection.id },
@@ -107,6 +127,40 @@ export async function getValidAccessToken(userId: string): Promise<string> {
     throw new Error(
       "Failed to refresh X token. Please reconnect your X account."
     );
+  }
+}
+
+/**
+ * Posts a tweet with automatic token refresh on 401.
+ * If the first attempt fails with an auth error, forces a token refresh
+ * and retries exactly once before giving up.
+ */
+export async function postTweetWithRetry(
+  userId: string,
+  text: string,
+  replyToId?: string
+): Promise<{ id: string }> {
+  const accessToken = await getValidAccessToken(userId);
+
+  try {
+    return await postTweet(accessToken, text, replyToId);
+  } catch (error) {
+    // If auth error, force-refresh the token and retry once
+    if (error instanceof XPostError && error.isAuthError) {
+      console.log("[X API] Auth error on post — force-refreshing token and retrying...");
+
+      try {
+        const freshToken = await forceRefreshToken(userId);
+        return await postTweet(freshToken, text, replyToId);
+      } catch (retryError) {
+        // If retry also fails, throw that error
+        console.error("[X API] Retry after token refresh also failed:", retryError);
+        throw retryError;
+      }
+    }
+
+    // Non-auth errors: re-throw immediately
+    throw error;
   }
 }
 

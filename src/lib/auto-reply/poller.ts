@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getValidAccessToken, getAccountRecentTweets, getUsersByUsernames, postTweet, XPostError } from "@/lib/platform/x-client";
+import { getValidAccessToken, getAccountRecentTweets, getUsersByUsernames, postTweetWithRetry, XPostError } from "@/lib/platform/x-client";
 import { generateContent } from "@/lib/content/generator";
 
 export interface PollResult {
@@ -147,10 +147,10 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
               result.repliesGenerated++;
 
               if (account.replyMode === "auto") {
-                // Auto mode: post immediately
+                // Auto mode: post immediately (with auto token refresh on 401)
                 try {
-                  const posted = await postTweet(
-                    accessToken,
+                  const posted = await postTweetWithRetry(
+                    userId,
                     replyContent,
                     tweet.id
                   );

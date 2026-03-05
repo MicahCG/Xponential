@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getValidAccessToken, postTweet, XPostError } from "@/lib/platform/x-client";
+import { postTweetWithRetry, XPostError } from "@/lib/platform/x-client";
 
 export async function PUT(
   request: NextRequest,
@@ -50,9 +50,8 @@ export async function PUT(
   // Approve: post the reply (use edited content if provided)
   const contentToPost = editedContent?.trim() || replyLog.replyContent;
   try {
-    const accessToken = await getValidAccessToken(session.user.id);
-    const result = await postTweet(
-      accessToken,
+    const result = await postTweetWithRetry(
+      session.user.id,
       contentToPost,
       replyLog.targetTweetId
     );
