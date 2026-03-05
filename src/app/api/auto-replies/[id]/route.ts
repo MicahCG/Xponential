@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getValidAccessToken } from "@/lib/platform/x-client";
-import { postTweet } from "@/lib/platform/x-client";
+import { getValidAccessToken, postTweet, XPostError } from "@/lib/platform/x-client";
 
 export async function PUT(
   request: NextRequest,
@@ -85,10 +84,37 @@ export async function PUT(
   } catch (error) {
     console.error("Approve auto-reply error:", error);
 
+    // Determine appropriate status — auth/token errors should be "pending"
+    // so the user can reconnect and retry, not permanently "failed"
+    const isRetryable =
+      error instanceof XPostError &&
+      (error.isAuthError || error.isRateLimit || error.isTokenExpired);
+
+    const newStatus = isRetryable ? "pending" : "failed";
+
     await prisma.autoReplyLog.update({
       where: { id },
-      data: { status: "failed" },
+      data: { status: newStatus },
     });
+
+    // Build actionable error response
+    if (error instanceof XPostError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          errorType: error.isAuthError
+            ? "auth"
+            : error.isRateLimit
+              ? "rate_limit"
+              : error.isDuplicate
+                ? "duplicate"
+                : "api_error",
+          httpCode: error.httpCode,
+          retryable: isRetryable,
+        },
+        { status: error.httpCode === 429 ? 429 : error.isAuthError ? 401 : 500 }
+      );
+    }
 
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to post reply" },

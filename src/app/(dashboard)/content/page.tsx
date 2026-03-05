@@ -263,24 +263,62 @@ export default function AutoReplyPage() {
     }
   };
 
+  const [approveError, setApproveError] = useState<string | null>(null);
+
   const handleApprove = async (replyId: string, editedContent?: string) => {
+    setApproveError(null);
     setReplies((prev) =>
       prev.map((r) => (r.id === replyId ? { ...r, status: "posting" } : r))
     );
 
-    const res = await fetch(`/api/auto-replies/${replyId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "approve", ...(editedContent !== undefined && { content: editedContent }) }),
-    });
+    try {
+      const res = await fetch(`/api/auto-replies/${replyId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "approve", ...(editedContent !== undefined && { content: editedContent }) }),
+      });
 
-    setReplies((prev) =>
-      prev.map((r) =>
-        r.id === replyId
-          ? { ...r, status: res.ok ? "posted" : "failed", ...(editedContent !== undefined && { replyContent: editedContent }) }
-          : r
-      )
-    );
+      const data = await res.json();
+
+      if (!res.ok) {
+        const errorMsg = data.error || "Failed to post reply";
+        const errorType = data.errorType as string | undefined;
+        setApproveError(
+          errorType === "auth"
+            ? `Auth error: ${errorMsg}`
+            : errorType === "rate_limit"
+              ? `Rate limited: ${errorMsg}`
+              : errorType === "duplicate"
+                ? `Duplicate: ${errorMsg}`
+                : errorMsg
+        );
+
+        // If retryable, keep as pending so user can try again
+        setReplies((prev) =>
+          prev.map((r) =>
+            r.id === replyId
+              ? { ...r, status: data.retryable ? "pending" : "failed" }
+              : r
+          )
+        );
+        return;
+      }
+
+      setReplies((prev) =>
+        prev.map((r) =>
+          r.id === replyId
+            ? { ...r, status: "posted", ...(editedContent !== undefined && { replyContent: editedContent }) }
+            : r
+        )
+      );
+    } catch {
+      setApproveError("Network error — please check your connection and try again.");
+      setReplies((prev) =>
+        prev.map((r) =>
+          r.id === replyId ? { ...r, status: "pending" } : r
+        )
+      );
+    }
   };
 
   const handleReject = async (replyId: string) => {
@@ -482,6 +520,22 @@ export default function AutoReplyPage() {
             </div>
           </CardHeader>
           <CardContent>
+            {approveError && (
+              <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium">Post failed</p>
+                    <p className="mt-1">{approveError}</p>
+                  </div>
+                  <button
+                    onClick={() => setApproveError(null)}
+                    className="shrink-0 text-red-500 hover:text-red-700"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="space-y-4">
               {replies.map((reply) => (
                 <ReplyLogCard

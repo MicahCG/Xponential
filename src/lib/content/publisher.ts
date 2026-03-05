@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { postTweet } from "@/lib/platform/x-client";
+import { postTweet, XPostError } from "@/lib/platform/x-client";
 import { createLinkedInPost } from "@/lib/platform/linkedin-client";
 
 export async function publishQueueItem(queueItemId: string, userId: string) {

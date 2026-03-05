@@ -1,6 +1,41 @@
-import { TwitterApi } from "twitter-api-v2";
+import { TwitterApi, ApiResponseError, ApiRequestError } from "twitter-api-v2";
 import { prisma } from "@/lib/prisma";
 import { refreshAccessToken } from "@/lib/oauth/x";
+
+/**
+ * Custom error class for X API posting failures.
+ * Contains structured information about what went wrong.
+ */
+export class XPostError extends Error {
+  public readonly httpCode: number | null;
+  public readonly xErrorCode: number | string | null;
+  public readonly isAuthError: boolean;
+  public readonly isRateLimit: boolean;
+  public readonly isDuplicate: boolean;
+  public readonly isTokenExpired: boolean;
+  public readonly rawErrors: unknown;
+
+  constructor(opts: {
+    message: string;
+    httpCode?: number | null;
+    xErrorCode?: number | string | null;
+    isAuthError?: boolean;
+    isRateLimit?: boolean;
+    isDuplicate?: boolean;
+    isTokenExpired?: boolean;
+    rawErrors?: unknown;
+  }) {
+    super(opts.message);
+    this.name = "XPostError";
+    this.httpCode = opts.httpCode ?? null;
+    this.xErrorCode = opts.xErrorCode ?? null;
+    this.isAuthError = opts.isAuthError ?? false;
+    this.isRateLimit = opts.isRateLimit ?? false;
+    this.isDuplicate = opts.isDuplicate ?? false;
+    this.isTokenExpired = opts.isTokenExpired ?? false;
+    this.rawErrors = opts.rawErrors;
+  }
+}
 
 export function createXClient(accessToken: string) {
   return new TwitterApi(accessToken);
@@ -343,6 +378,27 @@ export async function postTweet(
   text: string,
   replyToId?: string
 ) {
+  // Pre-flight validation
+  if (!accessToken) {
+    throw new XPostError({
+      message: "No access token provided. Please reconnect your X account.",
+      isAuthError: true,
+      isTokenExpired: true,
+    });
+  }
+
+  if (!text || text.trim().length === 0) {
+    throw new XPostError({
+      message: "Tweet text cannot be empty.",
+    });
+  }
+
+  if (text.length > 280) {
+    throw new XPostError({
+      message: `Tweet text too long (${text.length}/280 characters).`,
+    });
+  }
+
   const client = createXClient(accessToken);
   const params: { text: string; reply?: { in_reply_to_tweet_id: string } } = {
     text,
@@ -352,6 +408,129 @@ export async function postTweet(
     params.reply = { in_reply_to_tweet_id: replyToId };
   }
 
-  const result = await client.v2.tweet(params);
-  return result.data;
+  try {
+    const result = await client.v2.tweet(params);
+    console.log(
+      `[X API] Tweet posted successfully: id=${result.data.id}`,
+      replyToId ? `(reply to ${replyToId})` : "(original tweet)"
+    );
+    return result.data;
+  } catch (error) {
+    // Handle X API response errors (HTTP 4xx/5xx from X)
+    if (error instanceof ApiResponseError) {
+      const errJson = error.toJSON();
+      console.error("[X API] ApiResponseError posting tweet:", {
+        httpCode: error.code,
+        isAuthError: error.isAuthError,
+        rateLimitError: error.rateLimitError,
+        errors: error.errors,
+        data: error.data,
+        rateLimit: error.rateLimit,
+        message: error.message,
+      });
+
+      // Check for specific error codes
+      const v1Errors = (error.errors ?? []) as { code?: number; message?: string }[];
+      const firstErrorCode = v1Errors[0]?.code;
+
+      // Duplicate tweet
+      if (error.hasErrorCode(187)) {
+        throw new XPostError({
+          message: "This tweet has already been posted (duplicate content detected by X).",
+          httpCode: error.code,
+          xErrorCode: 187,
+          isDuplicate: true,
+          rawErrors: errJson,
+        });
+      }
+
+      // Auth / token errors
+      if (error.isAuthError || error.code === 401 || error.code === 403) {
+        const isExpired = error.hasErrorCode(89); // InvalidOrExpiredToken
+        const noWriteRight = error.hasErrorCode(261); // NoWriteRightForApp
+
+        let message = "X API authentication failed.";
+        if (isExpired) {
+          message = "X access token is expired or invalid. Please reconnect your X account.";
+        } else if (noWriteRight) {
+          message = "Your X app does not have write permissions. Check your X Developer Portal app settings.";
+        } else if (error.code === 403) {
+          message = `X API forbidden (403): ${error.data?.detail || error.data?.error || error.message}. This may be an app permissions issue.`;
+        } else {
+          message = `X API auth error (${error.code}): ${error.data?.detail || error.data?.error || error.message}`;
+        }
+
+        throw new XPostError({
+          message,
+          httpCode: error.code,
+          xErrorCode: firstErrorCode ?? null,
+          isAuthError: true,
+          isTokenExpired: isExpired,
+          rawErrors: errJson,
+        });
+      }
+
+      // Rate limit
+      if (error.rateLimitError || error.code === 429) {
+        const resetTime = error.rateLimit?.reset
+          ? new Date(error.rateLimit.reset * 1000).toISOString()
+          : "unknown";
+        throw new XPostError({
+          message: `X API rate limit exceeded. Try again after ${resetTime}.`,
+          httpCode: 429,
+          xErrorCode: 88,
+          isRateLimit: true,
+          rawErrors: errJson,
+        });
+      }
+
+      // Tweet-specific errors
+      if (error.hasErrorCode(385)) {
+        throw new XPostError({
+          message: "Cannot reply to this tweet — the original tweet has been deleted.",
+          httpCode: error.code,
+          xErrorCode: 385,
+          rawErrors: errJson,
+        });
+      }
+
+      if (error.hasErrorCode(186)) {
+        throw new XPostError({
+          message: "Tweet text is too long according to X API.",
+          httpCode: error.code,
+          xErrorCode: 186,
+          rawErrors: errJson,
+        });
+      }
+
+      // Generic API error with details
+      const detail = error.data?.detail || error.data?.error || error.message;
+      throw new XPostError({
+        message: `X API error (HTTP ${error.code}): ${detail}`,
+        httpCode: error.code,
+        xErrorCode: firstErrorCode ?? null,
+        rawErrors: errJson,
+      });
+    }
+
+    // Handle network / request errors (couldn't even reach X)
+    if (error instanceof ApiRequestError) {
+      console.error("[X API] ApiRequestError (network issue):", {
+        message: error.message,
+        requestError: error.requestError,
+      });
+      throw new XPostError({
+        message: `Network error connecting to X API: ${error.message}. Please try again.`,
+      });
+    }
+
+    // Unknown error type — log everything and re-throw
+    console.error("[X API] Unknown error posting tweet:", error);
+    throw new XPostError({
+      message: error instanceof Error
+        ? `Unexpected error posting tweet: ${error.message}`
+        : "Unexpected error posting tweet",
+      rawErrors: error,
+    });
+  }
 }

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getValidAccessToken, getAccountRecentTweets, getUsersByUsernames, postTweet } from "@/lib/platform/x-client";
+import { getValidAccessToken, getAccountRecentTweets, getUsersByUsernames, postTweet, XPostError } from "@/lib/platform/x-client";
 import { generateContent } from "@/lib/content/generator";
 
 export interface PollResult {
@@ -185,7 +185,12 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
 
                   result.repliesPosted++;
                 } catch (postErr) {
-                  // Log as failed if posting fails
+                  // For auth/rate-limit errors, save as "pending" so they can be retried
+                  const isRetryable =
+                    postErr instanceof XPostError &&
+                    (postErr.isAuthError || postErr.isRateLimit || postErr.isTokenExpired);
+                  const postStatus = isRetryable ? "pending" : "failed";
+
                   await prisma.autoReplyLog.create({
                     data: {
                       userId,
@@ -195,11 +200,17 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
                       targetAuthor: account.accountHandle,
                       replyContent,
                       replyType: "text",
-                      status: "failed",
+                      status: postStatus,
                     },
                   });
+
+                  const errorDetail = postErr instanceof XPostError
+                    ? `${postErr.message} (HTTP ${postErr.httpCode}, auth=${postErr.isAuthError}, rateLimit=${postErr.isRateLimit})`
+                    : postErr instanceof Error
+                      ? postErr.message
+                      : "unknown";
                   result.errors.push(
-                    `@${account.accountHandle}: Failed to post reply - ${postErr instanceof Error ? postErr.message : "unknown"}`
+                    `@${account.accountHandle}: Failed to post reply - ${errorDetail}`
                   );
                 }
               } else {
