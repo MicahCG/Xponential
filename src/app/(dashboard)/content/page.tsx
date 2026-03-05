@@ -67,7 +67,7 @@ interface AutoReplyLog {
   watchedAccount: { accountHandle: string };
 }
 
-const MAX_ENABLED = 10;
+const MAX_ENABLED = 12;
 
 // ─── Formatting ──────────────────────────────────────────────
 
