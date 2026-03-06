@@ -5,6 +5,10 @@ import { TwitterCookieForm } from "@/components/settings/twitter-cookie-form";
 import { Check } from "lucide-react";
 import Link from "next/link";
 
+export const metadata = {
+  title: "Cookie Setup - Xponential",
+};
+
 export default async function CookieSetupPage() {
   const session = await requireAuth();
 
