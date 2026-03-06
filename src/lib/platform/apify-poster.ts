@@ -1,10 +1,10 @@
-import { ApifyClient } from "apify-client";
 import { prisma } from "@/lib/prisma";
 import { XPostError } from "./x-client";
 
 const APIFY_ACTOR_ID = "T0jPxQieOXCJdsbFP";
+const APIFY_API_BASE = "https://api.apify.com/v2";
 
-function getApifyClient() {
+function getApifyToken(): string {
   const token = process.env.APIFY_API_TOKEN;
   if (!token) {
     throw new XPostError({
@@ -13,7 +13,7 @@ function getApifyClient() {
       isAuthError: true,
     });
   }
-  return new ApifyClient({ token });
+  return token;
 }
 
 /**
@@ -47,6 +47,9 @@ async function getTwitterCookie(userId: string): Promise<string> {
 /**
  * Posts a tweet or reply via the Apify third-party actor.
  *
+ * Uses direct fetch() calls to the Apify REST API instead of the
+ * apify-client SDK, which has dynamic require() issues with Next.js/webpack.
+ *
  * Uses cookie-based auth instead of the official X API, which avoids
  * the write-permission issues with OAuth 2.0 app tokens.
  *
@@ -78,7 +81,7 @@ export async function postTweetViaApify(
   }
 
   const cookie = await getTwitterCookie(userId);
-  const client = getApifyClient();
+  const token = getApifyToken();
 
   const input: Record<string, string> = {
     cookie,
@@ -99,25 +102,57 @@ export async function postTweetViaApify(
   );
 
   try {
-    const run = await client.actor(APIFY_ACTOR_ID).call(input, {
-      timeout: 60, // 60 second timeout
+    // Step 1: Start the actor run and wait for it to finish (up to 60s)
+    const runUrl = `${APIFY_API_BASE}/acts/${APIFY_ACTOR_ID}/runs?token=${token}&waitForFinish=60`;
+    const runResponse = await fetch(runUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
     });
 
-    if (run.status !== "SUCCEEDED") {
-      console.error("[Apify] Actor run failed:", {
-        status: run.status,
-        runId: run.id,
-      });
+    if (!runResponse.ok) {
+      const errBody = await runResponse.text();
+      console.error("[Apify] Failed to start actor run:", runResponse.status, errBody);
       throw new XPostError({
-        message: `Apify actor run failed with status: ${run.status}`,
-        rawErrors: { runId: run.id, status: run.status },
+        message: `Apify API error (HTTP ${runResponse.status}): ${errBody}`,
+        rawErrors: { status: runResponse.status, body: errBody },
       });
     }
 
-    // Fetch the results from the run's dataset
-    const { items } = await client
-      .dataset(run.defaultDatasetId)
-      .listItems();
+    const run = await runResponse.json();
+
+    if (run.data?.status !== "SUCCEEDED") {
+      console.error("[Apify] Actor run did not succeed:", {
+        status: run.data?.status,
+        runId: run.data?.id,
+      });
+      throw new XPostError({
+        message: `Apify actor run failed with status: ${run.data?.status ?? "unknown"}`,
+        rawErrors: { runId: run.data?.id, status: run.data?.status },
+      });
+    }
+
+    const datasetId = run.data?.defaultDatasetId;
+    if (!datasetId) {
+      throw new XPostError({
+        message: "Apify actor run completed but returned no dataset ID.",
+        rawErrors: run.data,
+      });
+    }
+
+    // Step 2: Fetch results from the dataset
+    const datasetUrl = `${APIFY_API_BASE}/datasets/${datasetId}/items?token=${token}`;
+    const datasetResponse = await fetch(datasetUrl);
+
+    if (!datasetResponse.ok) {
+      const errBody = await datasetResponse.text();
+      throw new XPostError({
+        message: `Failed to fetch Apify dataset: HTTP ${datasetResponse.status}`,
+        rawErrors: { status: datasetResponse.status, body: errBody },
+      });
+    }
+
+    const items = (await datasetResponse.json()) as Record<string, unknown>[];
 
     console.log("[Apify] Actor run completed. Dataset items:", items);
 
@@ -125,11 +160,11 @@ export async function postTweetViaApify(
     if (items.length === 0) {
       throw new XPostError({
         message: "Apify actor returned no results. The tweet may not have been posted.",
-        rawErrors: { runId: run.id, items },
+        rawErrors: { runId: run.data?.id, items },
       });
     }
 
-    const result = items[0] as Record<string, unknown>;
+    const result = items[0];
 
     // Check if the result contains an error message
     if (result.status_message && typeof result.status_message === "string") {
@@ -143,8 +178,8 @@ export async function postTweetViaApify(
           message: `Apify posting failed: ${result.status_message}`,
           rawErrors: result,
           isAuthError:
-            result.status_message.includes("cookie") ||
-            result.status_message.includes("auth"),
+            (result.status_message as string).includes("cookie") ||
+            (result.status_message as string).includes("auth"),
         });
       }
     }
@@ -155,7 +190,7 @@ export async function postTweetViaApify(
       (result.tweet_id as string) ??
       (result.tweetId as string) ??
       (result.id as string) ??
-      run.id; // fallback to run ID if no tweet ID returned
+      run.data?.id; // fallback to run ID if no tweet ID returned
 
     console.log(
       `[Apify] Tweet posted successfully: id=${tweetId}`,
