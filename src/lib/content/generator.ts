@@ -6,6 +6,7 @@ import {
   buildReplyPrompt,
   buildOriginalPostPrompt,
   buildQuotePrompt,
+  type FeedbackExample,
 } from "./prompts";
 import { buildMemoryContext } from "./memory";
 import { DEFAULT_GENERATION_COUNT } from "@/lib/constants";
@@ -46,16 +47,21 @@ const CONTENT_OPTIONS_SCHEMA = {
 
 async function getActiveProfile(
   userId: string
-): Promise<{ personality: PersonalityProfile; replyInstructions: string | null } | null> {
+): Promise<{
+  personality: PersonalityProfile;
+  replyInstructions: string | null;
+  feedbackExamples: FeedbackExample[] | null;
+} | null> {
   const profile = await prisma.personalityProfile.findFirst({
     where: { userId, isActive: true },
-    select: { profileData: true, replyInstructions: true },
+    select: { profileData: true, replyInstructions: true, feedbackExamples: true },
   });
 
   if (!profile) return null;
   return {
     personality: profile.profileData as unknown as PersonalityProfile,
     replyInstructions: profile.replyInstructions,
+    feedbackExamples: profile.feedbackExamples as FeedbackExample[] | null,
   };
 }
 
@@ -70,7 +76,7 @@ export async function generateContent(
     );
   }
 
-  const { personality: profile, replyInstructions } = activeProfile;
+  const { personality: profile, replyInstructions, feedbackExamples } = activeProfile;
   const count = request.count ?? DEFAULT_GENERATION_COUNT;
   const memoryContext = await buildMemoryContext(
     userId,
@@ -93,6 +99,7 @@ export async function generateContent(
         platform: request.platform,
         count,
         replyInstructions,
+        feedbackExamples,
       });
       break;
 
@@ -108,6 +115,7 @@ export async function generateContent(
         platform: request.platform,
         count,
         replyInstructions,
+        feedbackExamples,
       });
       break;
 
@@ -123,6 +131,7 @@ export async function generateContent(
         count,
         additionalContext: request.additionalContext,
         replyInstructions,
+        feedbackExamples,
       });
       break;
   }

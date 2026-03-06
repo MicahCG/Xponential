@@ -6,12 +6,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Link2, Brain, PenTool, History } from "lucide-react";
+import { Link2, Brain, PenTool, History, Clock, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import { isSetupComplete } from "@/lib/setup-check";
+import { formatDistanceToNow } from "date-fns";
 
 export default async function DashboardPage() {
   const session = await requireAuth();
@@ -21,7 +22,7 @@ export default async function DashboardPage() {
   const setupDone = await isSetupComplete(userId);
   if (!setupDone) redirect("/setup");
 
-  const [connections, profile, pendingCount, recentPosts] = await Promise.all([
+  const [connections, profile, pendingCount, recentPosts, pendingReplies] = await Promise.all([
     prisma.platformConnection.findMany({
       where: { userId },
       select: { platform: true, status: true, accountHandle: true },
@@ -43,6 +44,19 @@ export default async function DashboardPage() {
         postType: true,
         content: true,
         postedAt: true,
+      },
+    }),
+    prisma.autoReplyLog.findMany({
+      where: { userId, status: "pending" },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        targetAuthor: true,
+        targetTweetText: true,
+        replyContent: true,
+        replyType: true,
+        createdAt: true,
       },
     }),
   ]);
@@ -124,6 +138,58 @@ export default async function DashboardPage() {
           </Card>
         </Link>
       </div>
+
+      {/* Pending Approval Replies */}
+      {pendingReplies.length > 0 && (
+        <div>
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-lg font-semibold">Pending Approval</h2>
+              <Badge variant="secondary">{pendingReplies.length}</Badge>
+            </div>
+            <Link href="/auto-replies" className="text-sm text-primary hover:underline">
+              View all
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {pendingReplies.map((reply) => (
+              <Link key={reply.id} href="/auto-replies">
+                <Card className="transition-colors hover:border-primary/50">
+                  <CardContent className="py-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">
+                          Replying to @{reply.targetAuthor}
+                        </span>
+                        {reply.replyType === "video" && (
+                          <Badge variant="outline" className="text-xs">
+                            video
+                          </Badge>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(reply.createdAt), {
+                          addSuffix: true,
+                        })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">
+                      &ldquo;{reply.targetTweetText}&rdquo;
+                    </p>
+                    {reply.replyContent && (
+                      <p className="text-sm truncate">
+                        {reply.replyContent}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {recentPosts.length > 0 && (
         <div>

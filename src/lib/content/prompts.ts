@@ -1,6 +1,12 @@
 import type { PersonalityProfile } from "@/lib/personality/types";
 import { X_CHAR_LIMIT, LINKEDIN_CHAR_LIMIT } from "@/lib/constants";
 
+export interface FeedbackExample {
+  type: "do" | "dont";
+  text: string;
+  note?: string;
+}
+
 function serializeProfile(profile: PersonalityProfile): string {
   return `Voice Profile:
 - Tone: ${profile.tone}
@@ -18,6 +24,31 @@ function instructionsBlock(instructions: string | null | undefined): string {
   return `\nIMPORTANT — The user has provided these specific instructions for how they want their content to sound:\n"${instructions}"\nFollow these instructions closely. They override the personality profile where they conflict.\n`;
 }
 
+function examplesBlock(examples: FeedbackExample[] | null | undefined): string {
+  if (!examples || examples.length === 0) return "";
+
+  const good = examples.filter((e) => e.type === "do");
+  const bad = examples.filter((e) => e.type === "dont");
+
+  let block = "";
+
+  if (good.length > 0) {
+    block += `\nEXAMPLES OF GOOD CONTENT (match this style closely):\n`;
+    for (const ex of good) {
+      block += `- "${ex.text}"${ex.note ? ` (${ex.note})` : ""}\n`;
+    }
+  }
+
+  if (bad.length > 0) {
+    block += `\nEXAMPLES OF BAD CONTENT (avoid this style):\n`;
+    for (const ex of bad) {
+      block += `- "${ex.text}"${ex.note ? ` (${ex.note})` : ""}\n`;
+    }
+  }
+
+  return block;
+}
+
 export function buildReplyPrompt(params: {
   personality: PersonalityProfile;
   targetPost: string;
@@ -26,6 +57,7 @@ export function buildReplyPrompt(params: {
   platform: "x" | "linkedin";
   count: number;
   replyInstructions?: string | null;
+  feedbackExamples?: FeedbackExample[] | null;
 }) {
   const charLimit =
     params.platform === "x" ? X_CHAR_LIMIT : LINKEDIN_CHAR_LIMIT;
@@ -38,7 +70,7 @@ export function buildReplyPrompt(params: {
 
 ${serializeProfile(params.personality)}
 ${platformProfile ? `\nPlatform-specific adjustments: ${JSON.stringify(platformProfile)}` : ""}
-${instructionsBlock(params.replyInstructions)}
+${instructionsBlock(params.replyInstructions)}${examplesBlock(params.feedbackExamples)}
 They are replying to this post by @${params.targetAuthor}:
 "${params.targetPost}"
 
@@ -63,6 +95,7 @@ export function buildOriginalPostPrompt(params: {
   count: number;
   additionalContext?: string;
   replyInstructions?: string | null;
+  feedbackExamples?: FeedbackExample[] | null;
 }) {
   const charLimit =
     params.platform === "x" ? X_CHAR_LIMIT : LINKEDIN_CHAR_LIMIT;
@@ -70,7 +103,7 @@ export function buildOriginalPostPrompt(params: {
   return `You are ghostwriting an original ${params.platform === "x" ? "tweet" : "LinkedIn post"} for someone with this voice:
 
 ${serializeProfile(params.personality)}
-${instructionsBlock(params.replyInstructions)}
+${instructionsBlock(params.replyInstructions)}${examplesBlock(params.feedbackExamples)}
 Topic: ${params.topic}
 ${params.additionalContext ? `Additional context: ${params.additionalContext}` : ""}
 
@@ -95,6 +128,7 @@ export function buildQuotePrompt(params: {
   platform: "x" | "linkedin";
   count: number;
   replyInstructions?: string | null;
+  feedbackExamples?: FeedbackExample[] | null;
 }) {
   const charLimit =
     params.platform === "x" ? X_CHAR_LIMIT : LINKEDIN_CHAR_LIMIT;
@@ -102,7 +136,7 @@ export function buildQuotePrompt(params: {
   return `You are ghostwriting a quote-${params.platform === "x" ? "tweet" : "post"} commentary for someone with this voice:
 
 ${serializeProfile(params.personality)}
-${instructionsBlock(params.replyInstructions)}
+${instructionsBlock(params.replyInstructions)}${examplesBlock(params.feedbackExamples)}
 They are quote-sharing this post by @${params.targetAuthor}:
 "${params.targetPost}"
 

@@ -131,8 +131,9 @@ model PersonalityProfile {
   method      PersonalityMethod
   rawInput    Json?             @map("raw_input")
   profileData       Json              @map("profile_data")
-  replyInstructions String?           @map("reply_instructions")
-  isActive          Boolean           @default(true) @map("is_active")
+  replyInstructions  String?           @map("reply_instructions") @db.Text
+  feedbackExamples   Json?             @map("feedback_examples")
+  isActive           Boolean           @default(true) @map("is_active")
   createdAt   DateTime          @default(now()) @map("created_at")
   updatedAt   DateTime          @updatedAt @map("updated_at")
 

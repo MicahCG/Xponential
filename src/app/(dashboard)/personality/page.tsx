@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 import { ProfileDisplay } from "@/components/personality/profile-display";
+import { FeedbackForm } from "@/components/personality/feedback-form";
 import type { PersonalityProfile } from "@/lib/personality/types";
 
 export default async function PersonalityPage() {
@@ -31,10 +32,20 @@ export default async function PersonalityPage() {
       </div>
 
       {profile ? (
-        <ProfileDisplay
-          profile={profile.profileData as unknown as PersonalityProfile}
-          method={profile.method}
-        />
+        <>
+          <ProfileDisplay
+            profile={profile.profileData as unknown as PersonalityProfile}
+            method={profile.method}
+          />
+          <FeedbackForm
+            initialInstructions={profile.replyInstructions}
+            initialExamples={
+              profile.feedbackExamples as
+                | { type: "do" | "dont"; text: string; note?: string }[]
+                | null
+            }
+          />
+        </>
       ) : (
         <div className="rounded-lg border border-dashed p-8 text-center">
           <p className="text-muted-foreground">

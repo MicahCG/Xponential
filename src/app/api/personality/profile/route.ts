@@ -16,6 +16,7 @@ export async function GET() {
       method: true,
       profileData: true,
       replyInstructions: true,
+      feedbackExamples: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -54,7 +55,7 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  const { replyInstructions, ...profileUpdates } = parsed.data;
+  const { replyInstructions, feedbackExamples, ...profileUpdates } = parsed.data;
   const currentData = existing.profileData as Record<string, unknown>;
   const updatedData = { ...currentData, ...profileUpdates };
 
@@ -63,6 +64,7 @@ export async function PUT(request: NextRequest) {
     data: {
       profileData: JSON.parse(JSON.stringify(updatedData)),
       ...(replyInstructions !== undefined && { replyInstructions }),
+      ...(feedbackExamples !== undefined && { feedbackExamples: JSON.parse(JSON.stringify(feedbackExamples)) }),
     },
   });
 
@@ -70,5 +72,6 @@ export async function PUT(request: NextRequest) {
     id: updated.id,
     profile: updated.profileData,
     replyInstructions: updated.replyInstructions,
+    feedbackExamples: updated.feedbackExamples,
   });
 }
