@@ -26,17 +26,14 @@ import {
   Trash2,
   MessageSquareReply,
   Video,
-  Check,
-  Clock,
-  XCircle,
   Sparkles,
   TrendingUp,
   Save,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatDistanceToNow } from "date-fns";
 import { AnalyzeStep } from "@/components/setup/analyze-step";
 import { AccountsStep } from "@/components/setup/accounts-step";
+import { ReplyFeed } from "@/components/auto-replies/reply-feed";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -51,20 +48,6 @@ interface WatchedAccount {
   replyMode: string;
   replyType: string;
   category: string | null;
-}
-
-interface AutoReplyLog {
-  id: string;
-  targetTweetId: string;
-  targetTweetText: string;
-  targetAuthor: string;
-  replyContent: string;
-  replyType: string;
-  replyTweetId: string | null;
-  status: string;
-  createdAt: string;
-  postedAt: string | null;
-  watchedAccount: { accountHandle: string };
 }
 
 const MAX_ENABLED = 12;
@@ -82,7 +65,6 @@ function formatFollowers(n: number | null): string {
 
 export default function AutoReplyPage() {
   const [accounts, setAccounts] = useState<WatchedAccount[]>([]);
-  const [replies, setReplies] = useState<AutoReplyLog[]>([]);
   const [loading, setLoading] = useState(true);
   // null = loading, false = no profile, true = has profile
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
@@ -104,9 +86,8 @@ export default function AutoReplyPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [accountsRes, repliesRes, profileRes] = await Promise.all([
+      const [accountsRes, profileRes] = await Promise.all([
         fetch("/api/watched-accounts"),
-        fetch("/api/auto-replies"),
         fetch("/api/personality/profile"),
       ]);
 
@@ -135,10 +116,6 @@ export default function AutoReplyPage() {
         }
       }
 
-      if (repliesRes.ok) {
-        const data = await repliesRes.json();
-        setReplies(data.replies);
-      }
     } catch {
       // Silently fail — page still renders with empty state
     } finally {
@@ -261,83 +238,6 @@ export default function AutoReplyPage() {
     } finally {
       setAdding(false);
     }
-  };
-
-  const [approveError, setApproveError] = useState<string | null>(null);
-
-  const handleApprove = async (replyId: string, editedContent?: string) => {
-    setApproveError(null);
-    setReplies((prev) =>
-      prev.map((r) => (r.id === replyId ? { ...r, status: "posting" } : r))
-    );
-
-    try {
-      const res = await fetch(`/api/auto-replies/${replyId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "approve", ...(editedContent !== undefined && { content: editedContent }) }),
-      });
-
-      const data = await res.json();
-      console.log("[approve response]", res.status, data);
-
-      if (!res.ok) {
-        const errorMsg = data.error || "Failed to post reply";
-        const source = data.source as string | undefined;
-        const errorType = data.errorType as string | undefined;
-
-        // If session expired, tell user to log in again
-        if (source === "session") {
-          setApproveError("Your session expired. Please refresh the page and log in again.");
-        } else {
-          setApproveError(
-            errorType === "auth"
-              ? `X API auth error: ${errorMsg}`
-              : errorType === "rate_limit"
-                ? `Rate limited: ${errorMsg}`
-                : errorType === "duplicate"
-                  ? `Duplicate: ${errorMsg}`
-                  : `Error: ${errorMsg}`
-          );
-        }
-
-        // If retryable, keep as pending so user can try again
-        setReplies((prev) =>
-          prev.map((r) =>
-            r.id === replyId
-              ? { ...r, status: data.retryable ? "pending" : "failed" }
-              : r
-          )
-        );
-        return;
-      }
-
-      setReplies((prev) =>
-        prev.map((r) =>
-          r.id === replyId
-            ? { ...r, status: "posted", ...(editedContent !== undefined && { replyContent: editedContent }) }
-            : r
-        )
-      );
-    } catch {
-      setApproveError("Network error — please check your connection and try again.");
-      setReplies((prev) =>
-        prev.map((r) =>
-          r.id === replyId ? { ...r, status: "pending" } : r
-        )
-      );
-    }
-  };
-
-  const handleReject = async (replyId: string) => {
-    setReplies((prev) =>
-      prev.map((r) => (r.id === replyId ? { ...r, status: "rejected" } : r))
-    );
-    await fetch(`/api/auto-replies/${replyId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "reject" }),
-    });
   };
 
   if (loading) {
@@ -508,55 +408,8 @@ export default function AutoReplyPage() {
         </Card>
       )}
 
-      {/* Recent Auto-Replies */}
-      {replies.length > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">Recent Auto-Replies</CardTitle>
-                <CardDescription>
-                  Latest replies generated by your AI agent
-                </CardDescription>
-              </div>
-              {replies.filter((r) => r.status === "pending").length > 0 && (
-                <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300 gap-1">
-                  <Clock className="h-3 w-3" />
-                  {replies.filter((r) => r.status === "pending").length} pending review
-                </Badge>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {approveError && (
-              <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-medium">Post failed</p>
-                    <p className="mt-1">{approveError}</p>
-                  </div>
-                  <button
-                    onClick={() => setApproveError(null)}
-                    className="shrink-0 text-red-500 hover:text-red-700"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-            )}
-            <div className="space-y-4">
-              {replies.map((reply) => (
-                <ReplyLogCard
-                  key={reply.id}
-                  reply={reply}
-                  onApprove={(editedContent) => handleApprove(reply.id, editedContent)}
-                  onReject={() => handleReject(reply.id)}
-                />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Recent Auto-Replies — shared interactive component */}
+      <ReplyFeed />
     </div>
   );
 }
@@ -666,126 +519,3 @@ function WatchedAccountCard({
   );
 }
 
-// ─── Reply Log Card ──────────────────────────────────────────
-
-function ReplyLogCard({
-  reply,
-  onApprove,
-  onReject,
-}: {
-  reply: AutoReplyLog;
-  onApprove: (editedContent?: string) => void;
-  onReject: () => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(reply.replyContent);
-
-  const statusConfig: Record<
-    string,
-    { icon: React.ReactNode; label: string; className: string }
-  > = {
-    posted: {
-      icon: <Check className="h-3 w-3" />,
-      label: "Posted",
-      className: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
-    },
-    pending: {
-      icon: <Clock className="h-3 w-3" />,
-      label: "Pending",
-      className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300",
-    },
-    failed: {
-      icon: <XCircle className="h-3 w-3" />,
-      label: "Failed",
-      className: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
-    },
-    rejected: {
-      icon: <XCircle className="h-3 w-3" />,
-      label: "Rejected",
-      className: "bg-muted text-muted-foreground",
-    },
-    posting: {
-      icon: <Loader2 className="h-3 w-3 animate-spin" />,
-      label: "Posting...",
-      className: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-    },
-  };
-
-  const status = statusConfig[reply.status] ?? statusConfig.pending;
-  const isPending = reply.status === "pending";
-  const isEdited = editedContent !== reply.replyContent;
-
-  return (
-    <div className={cn("rounded-lg border p-3 space-y-2", isPending && "border-yellow-200 dark:border-yellow-800")}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>@{reply.targetAuthor} tweeted</span>
-            <span>&middot;</span>
-            <span>
-              {formatDistanceToNow(new Date(reply.createdAt), {
-                addSuffix: true,
-              })}
-            </span>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
-            &ldquo;{reply.targetTweetText}&rdquo;
-          </p>
-        </div>
-        <Badge className={cn("shrink-0 gap-1", status.className)}>
-          {status.icon}
-          {status.label}
-        </Badge>
-      </div>
-
-      {isPending && editing ? (
-        <div className="space-y-2">
-          <Textarea
-            value={editedContent}
-            onChange={(e) => setEditedContent(e.target.value)}
-            rows={3}
-            maxLength={280}
-            className="text-sm"
-          />
-          <div className="flex items-center justify-between">
-            <span className={cn("text-xs", editedContent.length > 280 ? "text-destructive" : "text-muted-foreground")}>
-              {editedContent.length}/280
-            </span>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => { setEditing(false); setEditedContent(reply.replyContent); }}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <div
-          className={cn("rounded-md bg-muted/50 p-2", isPending && "cursor-pointer hover:bg-muted/80 transition-colors")}
-          onClick={() => isPending && setEditing(true)}
-        >
-          <p className="text-sm">
-            <span className="font-medium">Your reply:</span> {editing ? editedContent : reply.replyContent}
-          </p>
-          {isPending && (
-            <p className="text-xs text-muted-foreground mt-1">Click to edit</p>
-          )}
-        </div>
-      )}
-
-      {isPending && (
-        <div className="flex items-center gap-2 pt-1">
-          <Button size="sm" onClick={() => onApprove(isEdited ? editedContent : undefined)}>
-            <Check className="mr-1 h-3 w-3" />
-            {isEdited ? "Post Edited Reply" : "Approve & Post"}
-          </Button>
-          <Button size="sm" variant="outline" onClick={onReject}>
-            <XCircle className="mr-1 h-3 w-3" />
-            Reject
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
