@@ -44,12 +44,12 @@ export const updateProfileSchema = z.object({
     x: z.record(z.string(), z.unknown()).optional(),
     linkedin: z.record(z.string(), z.unknown()).optional(),
   }).optional(),
-  replyInstructions: z.string().max(2000).optional(),
+  replyInstructions: z.string().max(2000).nullable().optional(),
   feedbackExamples: z.array(z.object({
     type: z.enum(["do", "dont"]),
     text: z.string().max(500),
     note: z.string().max(200).optional(),
-  })).max(20).optional(),
+  })).max(20).nullable().optional(),
 });
 
 // Content validators
