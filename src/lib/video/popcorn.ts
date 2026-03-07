@@ -163,37 +163,3 @@ export async function getMovieUrl(movieRootId: string): Promise<MovieUrl> {
   return (await res.json()) as MovieUrl;
 }
 
-/**
- * Poll for movie completion with exponential backoff.
- * Returns the final video URL when ready, or throws after timeout.
- */
-export async function waitForMovie(
-  movieRootId: string,
-  opts?: { maxWaitMs?: number; pollIntervalMs?: number }
-): Promise<MovieUrl> {
-  const maxWait = opts?.maxWaitMs ?? 5 * 60 * 1000; // 5 minutes default
-  const baseInterval = opts?.pollIntervalMs ?? 5000; // 5s base
-  const startTime = Date.now();
-  let attempt = 0;
-
-  while (Date.now() - startTime < maxWait) {
-    const status = await getMovieStatus(movieRootId);
-
-    if (status.status === "ready") {
-      // Fetch the final URLs
-      return getMovieUrl(movieRootId);
-    }
-
-    attempt++;
-    // Exponential backoff: 5s, 7.5s, 11.25s, ... capped at 30s
-    const delay = Math.min(baseInterval * Math.pow(1.5, attempt - 1), 30000);
-    console.log(
-      `[Popcorn] Movie ${movieRootId} still processing, waiting ${Math.round(delay / 1000)}s...`
-    );
-    await new Promise((resolve) => setTimeout(resolve, delay));
-  }
-
-  throw new Error(
-    `Popcorn video generation timed out after ${Math.round(maxWait / 1000)}s for movieRootId: ${movieRootId}`
-  );
-}

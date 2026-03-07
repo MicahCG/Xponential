@@ -16,6 +16,7 @@ import {
   Check,
   Clock,
   XCircle,
+  Video,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
@@ -30,6 +31,7 @@ interface AutoReplyLog {
   replyContent: string;
   replyType: string;
   replyTweetId: string | null;
+  videoUrl: string | null;
   status: string;
   createdAt: string;
   postedAt: string | null;
@@ -253,6 +255,12 @@ function ReplyLogCard({
       label: "Rejected",
       className: "bg-muted text-muted-foreground",
     },
+    generating_video: {
+      icon: <Loader2 className="h-3 w-3 animate-spin" />,
+      label: "Generating video...",
+      className:
+        "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
+    },
     posting: {
       icon: <Loader2 className="h-3 w-3 animate-spin" />,
       label: "Posting...",
@@ -282,6 +290,12 @@ function ReplyLogCard({
                 addSuffix: true,
               })}
             </span>
+            {reply.replyType === "video" && (
+              <Badge variant="outline" className="gap-1 text-xs px-1.5 py-0">
+                <Video className="h-3 w-3" />
+                Video
+              </Badge>
+            )}
           </div>
           <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
             &ldquo;{reply.targetTweetText}&rdquo;
@@ -292,6 +306,25 @@ function ReplyLogCard({
           {status.label}
         </Badge>
       </div>
+
+      {/* Video preview */}
+      {reply.replyType === "video" && reply.videoUrl && (
+        <div className="rounded-md overflow-hidden border bg-black">
+          <video
+            src={reply.videoUrl}
+            controls
+            className="w-full max-h-64 object-contain"
+            preload="metadata"
+          />
+        </div>
+      )}
+
+      {reply.replyType === "video" && !reply.videoUrl && reply.status === "generating_video" && (
+        <div className="flex items-center gap-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Video is being generated... this usually takes 5–15 minutes.
+        </div>
+      )}
 
       {isPending && editing ? (
         <div className="space-y-2">

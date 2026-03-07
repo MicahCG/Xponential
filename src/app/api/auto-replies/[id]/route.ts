@@ -59,7 +59,8 @@ export async function PUT(
     const result = await postTweetWithRetry(
       session.user.id,
       contentToPost,
-      replyLog.targetTweetId
+      replyLog.targetTweetId,
+      replyLog.videoUrl ?? undefined
     );
 
     await prisma.autoReplyLog.update({
@@ -81,6 +82,8 @@ export async function PUT(
         content: contentToPost,
         targetPostId: replyLog.targetTweetId,
         targetAuthor: replyLog.targetAuthor,
+        videoUrl: replyLog.videoUrl,
+        videoFormat: replyLog.videoUrl ? "mp4" : undefined,
         platformPostId: result.id,
       },
     });

@@ -237,6 +237,7 @@ model AutoReplyLog {
   replyType        String    @default("text") @map("reply_type")
   replyTweetId     String?   @map("reply_tweet_id")
   videoUrl         String?   @map("video_url")
+  movieRootId      String?   @map("movie_root_id")
   status           String    @default("pending")
   createdAt        DateTime  @default(now()) @map("created_at")
   postedAt         DateTime? @map("posted_at")

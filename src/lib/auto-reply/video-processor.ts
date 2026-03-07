@@ -1,12 +1,14 @@
 import { prisma } from "@/lib/prisma";
-import { createMovie, waitForMovie } from "@/lib/video/popcorn";
+import { createMovie, getMovieStatus, getMovieUrl } from "@/lib/video/popcorn";
 import { generateContent } from "@/lib/content/generator";
 import { postTweetWithRetry, XPostError } from "@/lib/platform/x-client";
 
 export interface VideoProcessResult {
-  processed: number;
+  kicked: number;
+  ready: number;
   posted: number;
   failed: number;
+  stillProcessing: number;
   errors: string[];
 }
 
@@ -19,56 +21,47 @@ function buildVideoPrompt(targetAuthor: string, targetTweetId: string): string {
 }
 
 /**
- * Processes all pending video reply logs:
- * 1. Generates a short caption via AI
- * 2. Creates a video via Popcorn
- * 3. Waits for the video to be ready
- * 4. Posts the reply (caption + video) via Apify
+ * Two-phase video reply processor designed for serverless environments.
  *
- * Processes one log at a time to avoid overwhelming the video API.
+ * Phase 1 — KICK OFF: Find pending video logs that haven't started yet
+ *   (videoUrl=null, movieRootId=null). Generate a caption, call Popcorn
+ *   createMovie, store the movieRootId, set status to "generating_video".
+ *
+ * Phase 2 — CHECK STATUS: Find logs with status "generating_video".
+ *   Poll Popcorn for each. If ready, grab the URL and post (auto mode)
+ *   or save for approval (manual mode). If still processing, skip.
+ *   If stuck for >25 minutes, mark as failed.
+ *
+ * Each phase is fast (single API call per log) so it fits within
+ * Vercel's serverless function timeout limits.
  */
 export async function processVideoReplies(): Promise<VideoProcessResult> {
   const result: VideoProcessResult = {
-    processed: 0,
+    kicked: 0,
+    ready: 0,
     posted: 0,
     failed: 0,
+    stillProcessing: 0,
     errors: [],
   };
 
-  // Find all pending video reply logs that haven't been processed yet.
-  // videoUrl is null means the video hasn't been generated yet.
-  const pendingLogs = await prisma.autoReplyLog.findMany({
+  // ── Phase 1: Kick off new video generation jobs ─────────────
+
+  const newLogs = await prisma.autoReplyLog.findMany({
     where: {
       replyType: "video",
       status: "pending",
       videoUrl: null,
+      movieRootId: null,
     },
-    include: {
-      watchedAccount: true,
-    },
+    include: { watchedAccount: true },
     orderBy: { createdAt: "asc" },
-    take: 5, // Process up to 5 at a time to limit resource usage
+    take: 3,
   });
 
-  if (pendingLogs.length === 0) {
-    return result;
-  }
-
-  console.log(
-    `[VideoProcessor] Found ${pendingLogs.length} pending video replies to process`
-  );
-
-  for (const log of pendingLogs) {
-    result.processed++;
-
+  for (const log of newLogs) {
     try {
-      // Mark as processing to prevent duplicate processing
-      await prisma.autoReplyLog.update({
-        where: { id: log.id },
-        data: { status: "processing" },
-      });
-
-      // Step 1: Generate a short caption for the video reply
+      // Generate a short caption for the video reply
       let caption = "";
       try {
         const generated = await generateContent(
@@ -84,13 +77,12 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
         caption = generated[0]?.content ?? "";
       } catch (genErr) {
         console.warn(
-          `[VideoProcessor] Caption generation failed for log ${log.id}, using fallback:`,
+          `[VideoProcessor] Caption generation failed for log ${log.id}, continuing without:`,
           genErr
         );
-        // Continue without a caption — the video is the main content
       }
 
-      // Step 2: Create the video via Popcorn
+      // Kick off video generation
       const videoPrompt = buildVideoPrompt(
         log.targetAuthor,
         log.targetTweetId
@@ -104,28 +96,95 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
         userId: log.userId,
       });
 
-      // Step 3: Wait for the video to be ready (up to 5 minutes)
-      const movieResult = await waitForMovie(movie.movieRootId, {
-        maxWaitMs: 5 * 60 * 1000,
+      // Store movieRootId and caption, move to "generating_video" status
+      await prisma.autoReplyLog.update({
+        where: { id: log.id },
+        data: {
+          movieRootId: movie.movieRootId,
+          replyContent: caption,
+          status: "generating_video",
+        },
       });
 
-      const videoUrl = movieResult.videoUrl ?? movieResult.watermarkedVideoUrl;
-      if (!videoUrl) {
-        throw new Error("Video generation completed but no video URL returned");
+      result.kicked++;
+      console.log(
+        `[VideoProcessor] Kicked off video for log ${log.id}: movieRootId=${movie.movieRootId}`
+      );
+    } catch (err) {
+      await prisma.autoReplyLog.update({
+        where: { id: log.id },
+        data: { status: "failed" },
+      });
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      result.errors.push(`Log ${log.id} (kick off): ${msg}`);
+      result.failed++;
+      console.error(`[VideoProcessor] Failed to kick off log ${log.id}:`, err);
+    }
+  }
+
+  // ── Phase 2: Check status of in-progress video jobs ─────────
+
+  const inProgressLogs = await prisma.autoReplyLog.findMany({
+    where: {
+      replyType: "video",
+      status: "generating_video",
+      movieRootId: { not: null },
+    },
+    include: { watchedAccount: true },
+    orderBy: { createdAt: "asc" },
+    take: 10,
+  });
+
+  for (const log of inProgressLogs) {
+    try {
+      // Check if this job has been stuck for too long (>25 minutes)
+      const ageMs = Date.now() - new Date(log.createdAt).getTime();
+      const maxAgeMs = 25 * 60 * 1000;
+      if (ageMs > maxAgeMs) {
+        await prisma.autoReplyLog.update({
+          where: { id: log.id },
+          data: { status: "failed" },
+        });
+        result.failed++;
+        result.errors.push(
+          `Log ${log.id}: Video generation timed out after ${Math.round(ageMs / 60000)} minutes`
+        );
+        console.error(
+          `[VideoProcessor] Video timed out for log ${log.id} (${Math.round(ageMs / 60000)}m)`
+        );
+        continue;
       }
 
+      // Poll Popcorn for status
+      const status = await getMovieStatus(log.movieRootId!);
+
+      if (status.status !== "ready") {
+        result.stillProcessing++;
+        console.log(
+          `[VideoProcessor] Log ${log.id} still processing (${Math.round(ageMs / 60000)}m elapsed)`
+        );
+        continue;
+      }
+
+      // Video is ready — fetch final URL
+      const movieUrl = await getMovieUrl(log.movieRootId!);
+      const videoUrl = movieUrl.videoUrl ?? movieUrl.watermarkedVideoUrl;
+
+      if (!videoUrl) {
+        throw new Error("Video marked as ready but no URL returned");
+      }
+
+      result.ready++;
       console.log(
         `[VideoProcessor] Video ready for log ${log.id}: ${videoUrl}`
       );
 
-      // Step 4: Post the reply with video
+      // Post or save for approval based on reply mode
       const replyMode = log.watchedAccount.replyMode;
 
       if (replyMode === "auto") {
-        // Auto mode: post immediately
         try {
-          // Use caption if we have one, otherwise use a minimal text
-          const tweetText = caption || ".";
+          const tweetText = log.replyContent || ".";
 
           const posted = await postTweetWithRetry(
             log.userId,
@@ -137,7 +196,6 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
           await prisma.autoReplyLog.update({
             where: { id: log.id },
             data: {
-              replyContent: caption,
               videoUrl,
               replyTweetId: posted.id,
               status: "posted",
@@ -145,13 +203,12 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
             },
           });
 
-          // Also record in post history
           await prisma.postHistory.create({
             data: {
               userId: log.userId,
               platform: "x",
               postType: "reply",
-              content: caption,
+              content: log.replyContent || "",
               targetPostId: log.targetTweetId,
               targetAuthor: log.targetAuthor,
               videoUrl,
@@ -171,10 +228,10 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
               postErr.isRateLimit ||
               postErr.isTokenExpired);
 
+          // Save the video URL even if posting fails so we don't regenerate
           await prisma.autoReplyLog.update({
             where: { id: log.id },
             data: {
-              replyContent: caption,
               videoUrl,
               status: isRetryable ? "pending" : "failed",
             },
@@ -182,15 +239,14 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
 
           const msg =
             postErr instanceof Error ? postErr.message : "Unknown post error";
-          result.errors.push(`Log ${log.id}: Post failed - ${msg}`);
+          result.errors.push(`Log ${log.id} (post): ${msg}`);
           result.failed++;
         }
       } else {
-        // Manual mode: save as ready for user approval
+        // Manual mode: save video URL, set back to pending for user approval
         await prisma.autoReplyLog.update({
           where: { id: log.id },
           data: {
-            replyContent: caption,
             videoUrl,
             status: "pending",
           },
@@ -200,16 +256,17 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
         );
       }
     } catch (err) {
-      // Mark as failed
       await prisma.autoReplyLog.update({
         where: { id: log.id },
         data: { status: "failed" },
       });
-
       const msg = err instanceof Error ? err.message : "Unknown error";
-      result.errors.push(`Log ${log.id}: ${msg}`);
+      result.errors.push(`Log ${log.id} (check): ${msg}`);
       result.failed++;
-      console.error(`[VideoProcessor] Failed to process log ${log.id}:`, err);
+      console.error(
+        `[VideoProcessor] Failed to check status for log ${log.id}:`,
+        err
+      );
     }
   }
 
