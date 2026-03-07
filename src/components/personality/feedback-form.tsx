@@ -22,17 +22,26 @@ import {
   ThumbsDown,
   MessageSquare,
   Save,
+  Link as LinkIcon,
 } from "lucide-react";
 
 interface FeedbackExample {
   type: "do" | "dont";
   text: string;
   note?: string;
+  url?: string;
 }
 
 interface FeedbackFormProps {
   initialInstructions: string | null;
   initialExamples: FeedbackExample[] | null;
+}
+
+const TWEET_URL_REGEX =
+  /^https?:\/\/(www\.)?(twitter\.com|x\.com)\/\w+\/status(es)?\/\d+/i;
+
+function isTweetUrl(text: string): boolean {
+  return TWEET_URL_REGEX.test(text.trim());
 }
 
 export function FeedbackForm({
@@ -55,16 +64,79 @@ export function FeedbackForm({
   const [newDontText, setNewDontText] = useState("");
   const [newDontNote, setNewDontNote] = useState("");
 
-  const addExample = (type: "do" | "dont") => {
+  // Fetching state for URL resolution
+  const [fetchingDo, setFetchingDo] = useState(false);
+  const [fetchingDont, setFetchingDont] = useState(false);
+  const [fetchError, setFetchError] = useState<{
+    type: "do" | "dont";
+    message: string;
+  } | null>(null);
+
+  const fetchTweetText = async (
+    url: string
+  ): Promise<{ text: string; author: string | null } | null> => {
+    const res = await fetch("/api/personality/fetch-tweet", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: url.trim() }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error ?? "Failed to fetch tweet");
+    }
+    return res.json();
+  };
+
+  const addExample = async (type: "do" | "dont") => {
     const text = type === "do" ? newDoText : newDontText;
     const note = type === "do" ? newDoNote : newDontNote;
 
     if (!text.trim()) return;
 
-    setExamples((prev) => [
-      ...prev,
-      { type, text: text.trim(), note: note.trim() || undefined },
-    ]);
+    setFetchError(null);
+
+    // Check if it's a tweet URL — fetch the actual text
+    if (isTweetUrl(text)) {
+      const setFetching = type === "do" ? setFetchingDo : setFetchingDont;
+      setFetching(true);
+
+      try {
+        const result = await fetchTweetText(text);
+        if (!result) {
+          setFetchError({ type, message: "Could not fetch tweet content" });
+          return;
+        }
+
+        const autoNote = result.author
+          ? `@${result.author}${note.trim() ? ` — ${note.trim()}` : ""}`
+          : note.trim() || undefined;
+
+        setExamples((prev) => [
+          ...prev,
+          {
+            type,
+            text: result.text,
+            note: autoNote,
+            url: text.trim(),
+          },
+        ]);
+      } catch (err) {
+        setFetchError({
+          type,
+          message:
+            err instanceof Error ? err.message : "Failed to fetch tweet",
+        });
+        return;
+      } finally {
+        setFetching(false);
+      }
+    } else {
+      // Plain text — add directly
+      setExamples((prev) => [
+        ...prev,
+        { type, text: text.trim(), note: note.trim() || undefined },
+      ]);
+    }
 
     if (type === "do") {
       setNewDoText("");
@@ -161,7 +233,7 @@ export function FeedbackForm({
             </Label>
           </div>
           <p className="text-xs text-muted-foreground">
-            Paste replies or posts you like. The AI will match this style.
+            Paste a tweet link or write text you like. The AI will match this style.
           </p>
 
           {/* Existing do examples */}
@@ -183,6 +255,17 @@ export function FeedbackForm({
                           {ex.note}
                         </p>
                       )}
+                      {ex.url && (
+                        <a
+                          href={ex.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mt-1"
+                        >
+                          <LinkIcon className="h-3 w-3" />
+                          View tweet
+                        </a>
+                      )}
                     </div>
                     <Button
                       variant="ghost"
@@ -201,11 +284,27 @@ export function FeedbackForm({
           {/* Add do example form */}
           <div className="space-y-2 rounded-md border border-dashed p-3">
             <Input
-              placeholder="Paste a tweet or reply you like..."
+              placeholder="Paste a tweet link or write text you like..."
               value={newDoText}
-              onChange={(e) => setNewDoText(e.target.value)}
+              onChange={(e) => {
+                setNewDoText(e.target.value);
+                setFetchError((prev) =>
+                  prev?.type === "do" ? null : prev
+                );
+              }}
               className="text-sm"
             />
+            {isTweetUrl(newDoText) && (
+              <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                <LinkIcon className="h-3 w-3" />
+                Tweet link detected — we&apos;ll fetch the content automatically
+              </p>
+            )}
+            {fetchError?.type === "do" && (
+              <p className="text-xs text-destructive">
+                {fetchError.message}
+              </p>
+            )}
             <div className="flex gap-2">
               <Input
                 placeholder="Why is this good? (optional)"
@@ -217,10 +316,16 @@ export function FeedbackForm({
                 size="sm"
                 variant="outline"
                 onClick={() => addExample("do")}
-                disabled={!newDoText.trim()}
+                disabled={!newDoText.trim() || fetchingDo}
               >
-                <Plus className="h-3 w-3 mr-1" />
-                Add
+                {fetchingDo ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <>
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add
+                  </>
+                )}
               </Button>
             </div>
           </div>
@@ -237,7 +342,7 @@ export function FeedbackForm({
             </Label>
           </div>
           <p className="text-xs text-muted-foreground">
-            Paste replies or posts you dislike. The AI will avoid this style.
+            Paste a tweet link or write text you dislike. The AI will avoid this style.
           </p>
 
           {/* Existing don't examples */}
@@ -259,6 +364,17 @@ export function FeedbackForm({
                           {ex.note}
                         </p>
                       )}
+                      {ex.url && (
+                        <a
+                          href={ex.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mt-1"
+                        >
+                          <LinkIcon className="h-3 w-3" />
+                          View tweet
+                        </a>
+                      )}
                     </div>
                     <Button
                       variant="ghost"
@@ -277,11 +393,27 @@ export function FeedbackForm({
           {/* Add don't example form */}
           <div className="space-y-2 rounded-md border border-dashed p-3">
             <Input
-              placeholder="Paste a tweet or reply you dislike..."
+              placeholder="Paste a tweet link or write text you dislike..."
               value={newDontText}
-              onChange={(e) => setNewDontText(e.target.value)}
+              onChange={(e) => {
+                setNewDontText(e.target.value);
+                setFetchError((prev) =>
+                  prev?.type === "dont" ? null : prev
+                );
+              }}
               className="text-sm"
             />
+            {isTweetUrl(newDontText) && (
+              <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                <LinkIcon className="h-3 w-3" />
+                Tweet link detected — we&apos;ll fetch the content automatically
+              </p>
+            )}
+            {fetchError?.type === "dont" && (
+              <p className="text-xs text-destructive">
+                {fetchError.message}
+              </p>
+            )}
             <div className="flex gap-2">
               <Input
                 placeholder="Why is this bad? (optional)"
@@ -293,10 +425,16 @@ export function FeedbackForm({
                 size="sm"
                 variant="outline"
                 onClick={() => addExample("dont")}
-                disabled={!newDontText.trim()}
+                disabled={!newDontText.trim() || fetchingDont}
               >
-                <Plus className="h-3 w-3 mr-1" />
-                Add
+                {fetchingDont ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <>
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add
+                  </>
+                )}
               </Button>
             </div>
           </div>

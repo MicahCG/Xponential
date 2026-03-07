@@ -5,6 +5,7 @@ export interface FeedbackExample {
   type: "do" | "dont";
   text: string;
   note?: string;
+  url?: string;
 }
 
 function serializeProfile(profile: PersonalityProfile): string {

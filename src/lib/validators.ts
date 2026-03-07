@@ -49,6 +49,7 @@ export const updateProfileSchema = z.object({
     type: z.enum(["do", "dont"]),
     text: z.string().max(500),
     note: z.string().max(200).optional(),
+    url: z.string().url().max(500).optional(),
   })).max(20).nullable().optional(),
 });
 
