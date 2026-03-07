@@ -21,6 +21,19 @@ function buildVideoPrompt(targetAuthor: string, targetTweetId: string): string {
 }
 
 /**
+ * Looks up the user's Popcorn account ID from their settings.
+ * This is the userId sent to the Popcorn createMovie API.
+ */
+async function getPopcornUserId(userId: string): Promise<string | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { settings: true },
+  });
+  const settings = (user?.settings ?? {}) as Record<string, unknown>;
+  return (settings.popcornUserId as string) ?? null;
+}
+
+/**
  * Two-phase video reply processor designed for serverless environments.
  *
  * Phase 1 — KICK OFF: Find pending video logs that haven't started yet
@@ -82,6 +95,14 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
         );
       }
 
+      // Look up the user's Popcorn account ID
+      const popcornUserId = await getPopcornUserId(log.userId);
+      if (!popcornUserId) {
+        throw new Error(
+          "No Popcorn User ID configured. Add it in Settings to enable video replies."
+        );
+      }
+
       // Kick off video generation
       const videoPrompt = buildVideoPrompt(
         log.targetAuthor,
@@ -93,7 +114,7 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
         duration: "15",
         orientation: "vertical",
         quality: "medium",
-        userId: log.userId,
+        userId: popcornUserId,
       });
 
       // Store movieRootId and caption, move to "generating_video" status

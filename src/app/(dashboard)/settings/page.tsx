@@ -1,4 +1,5 @@
 import { TwitterCookieForm } from "@/components/settings/twitter-cookie-form";
+import { PopcornForm } from "@/components/settings/popcorn-form";
 
 export default function SettingsPage() {
   return (
@@ -10,6 +11,7 @@ export default function SettingsPage() {
         </p>
       </div>
       <TwitterCookieForm />
+      <PopcornForm />
     </div>
   );
 }
