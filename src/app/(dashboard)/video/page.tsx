@@ -31,7 +31,8 @@ type Stage =
   | "posting"
   | "posted";
 
-const POLL_INTERVAL_MS = 8000;
+const INITIAL_DELAY_MS = 3 * 60 * 1000;  // wait 3 min before first check
+const POLL_INTERVAL_MS = 30 * 1000;       // then every 30s
 const MAX_POLL_MINUTES = 30;
 
 // ─── Stage metadata ──────────────────────────────────────────
@@ -52,7 +53,7 @@ const stageInfo: Record<
   },
   polling: {
     label: "Generating Video",
-    description: "Popcorn is creating your video. This usually takes 5–15 minutes.",
+    description: "Popcorn is creating your video. First check in 3 min, then every 30s.",
     color: "bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300",
   },
   ready: {
@@ -141,9 +142,14 @@ export default function VideoPage() {
       }
     };
 
-    // Poll immediately, then on interval
-    doPoll();
-    pollRef.current = setInterval(doPoll, POLL_INTERVAL_MS);
+    // Wait 3 minutes before first check, then every 30s after
+    const initialTimer = setTimeout(() => {
+      doPoll();
+      pollRef.current = setInterval(doPoll, POLL_INTERVAL_MS);
+    }, INITIAL_DELAY_MS);
+
+    // Store so we can clear it on cancel
+    pollRef.current = initialTimer as unknown as ReturnType<typeof setInterval>;
   };
 
   const handleCreate = async () => {
@@ -322,7 +328,9 @@ export default function VideoPage() {
                   <span>
                     {stage === "creating"
                       ? "Submitting prompt to Popcorn MCP API..."
-                      : "Popcorn is generating your video. Checking every 8 seconds..."}
+                      : elapsedSeconds < INITIAL_DELAY_MS / 1000
+                        ? `First check in ${Math.ceil((INITIAL_DELAY_MS / 1000 - elapsedSeconds) / 60)}m ${(INITIAL_DELAY_MS / 1000 - elapsedSeconds) % 60}s...`
+                        : "Checking every 30 seconds..."}
                   </span>
                 </div>
                 {movieRootId && (
