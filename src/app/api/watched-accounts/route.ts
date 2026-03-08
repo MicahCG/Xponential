@@ -119,17 +119,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Check 5-account limit
+    // Check how many active slots are used — new account goes in disabled if full
     const enabledCount = await prisma.watchedAccount.count({
       where: { userId: session.user.id, isEnabled: true },
     });
-
-    if (enabledCount >= MAX_ENABLED_ACCOUNTS) {
-      return NextResponse.json(
-        { error: `Maximum ${MAX_ENABLED_ACCOUNTS} enabled accounts allowed. Disable one first.` },
-        { status: 400 }
-      );
-    }
 
     // Check if already exists
     const existing = await prisma.watchedAccount.findUnique({
@@ -183,7 +176,7 @@ export async function POST(request: NextRequest) {
         accountId,
         followersCount: followersCount ?? null,
         isRecommended: false,
-        isEnabled: true,
+        isEnabled: enabledCount < MAX_ENABLED_ACCOUNTS,
         replyCount: 0,
       },
     });

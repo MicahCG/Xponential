@@ -298,14 +298,14 @@ export default function AutoReplyPage() {
         </div>
         <Button
           onClick={handleAdd}
-          disabled={adding || !newHandle.trim() || enabledCount >= MAX_ENABLED}
+          disabled={adding || !newHandle.trim()}
           size="sm"
         >
           {adding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
           Add
         </Button>
         <span className="text-xs text-muted-foreground whitespace-nowrap">
-          {enabledCount}/{MAX_ENABLED} active
+          {enabledCount}/{MAX_ENABLED} active slots · {accounts.length} total
         </span>
         {addError && <p className="text-sm text-destructive">{addError}</p>}
       </div>
