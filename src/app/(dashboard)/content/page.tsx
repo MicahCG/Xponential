@@ -167,6 +167,8 @@ export default function AutoReplyPage() {
       setAccounts((prev) =>
         prev.map((a) => (a.id === id ? { ...a, isEnabled: !isEnabled } : a))
       );
+      const data = await res.json().catch(() => ({}));
+      setAddError(data.error ?? "Failed to update account");
     } else {
       // After disabling all accounts, check if we should show onboarding
       const updated = accounts.map((a) =>
