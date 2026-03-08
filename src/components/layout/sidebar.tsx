@@ -13,6 +13,7 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
+  Clapperboard,
 } from "lucide-react";
 
 const navItems = [
@@ -20,6 +21,7 @@ const navItems = [
   { href: "/connections", label: "Connections", icon: Link2 },
   { href: "/personality", label: "Personality", icon: Brain },
   { href: "/content", label: "Auto-Replies", icon: MessageSquareReply },
+  { href: "/video", label: "Video Studio", icon: Clapperboard },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
