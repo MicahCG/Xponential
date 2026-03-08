@@ -12,9 +12,19 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await runDailyLearning();
+
+    console.log("[Cron/daily-learning] Result:", {
+      usersProcessed: result.usersProcessed,
+      learningsSaved: result.learningsSaved,
+      errors: result.errors.length,
+    });
+    if (result.errors.length > 0) {
+      console.error("[Cron/daily-learning] Errors:", result.errors);
+    }
+
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
-    console.error("daily-learning cron error:", error);
+    console.error("[Cron/daily-learning] Fatal error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Cron job failed" },
       { status: 500 }

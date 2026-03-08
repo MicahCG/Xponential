@@ -15,19 +15,21 @@ export async function GET(request: NextRequest) {
 
   try {
     const status = await getMovieStatus(movieRootId);
+    console.log(`[video/status] movieRootId=${movieRootId} status=${status.status}`);
 
     if (status.status !== "ready") {
       return NextResponse.json({ status: "processing" });
     }
 
-    // Fetch the final URL once ready
     const movieUrl = await getMovieUrl(movieRootId);
     const videoUrl = movieUrl.videoUrl ?? movieUrl.watermarkedVideoUrl;
 
     if (!videoUrl) {
+      console.warn(`[video/status] movieRootId=${movieRootId} ready but no URL returned`);
       return NextResponse.json({ status: "processing" });
     }
 
+    console.log(`[video/status] movieRootId=${movieRootId} ready: ${videoUrl}`);
     return NextResponse.json({ status: "ready", videoUrl });
   } catch (error) {
     console.error("[video/status] Popcorn error:", error);

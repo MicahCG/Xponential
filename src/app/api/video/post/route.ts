@@ -21,12 +21,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    console.log(`[video/post] User ${session.user.id} posting video tweet: "${caption.slice(0, 60)}"`);
+
     const posted = await postTweetWithRetry(
       session.user.id,
       caption,
       undefined,
       videoUrl
     );
+
+    console.log(`[video/post] Posted successfully: tweetId=${posted.id}`);
 
     await prisma.postHistory.create({
       data: {

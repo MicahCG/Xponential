@@ -32,6 +32,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    console.log(`[video/create] User ${session.user.id} creating movie: "${prompt.slice(0, 80)}"`);
+
     const movie = await createMovie({
       prompt,
       duration: "15",
@@ -40,6 +42,7 @@ export async function POST(request: NextRequest) {
       userId: popcornUserId,
     });
 
+    console.log(`[video/create] Movie created: movieRootId=${movie.movieRootId}`);
     return NextResponse.json({ movieRootId: movie.movieRootId });
   } catch (error) {
     console.error("[video/create] Popcorn error:", error);

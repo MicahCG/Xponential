@@ -21,12 +21,21 @@ export async function GET(request: NextRequest) {
   try {
     const result = await processVideoReplies();
 
-    return NextResponse.json({
-      success: true,
-      ...result,
+    console.log("[Cron/process-videos] Result:", {
+      kicked: result.kicked,
+      ready: result.ready,
+      posted: result.posted,
+      failed: result.failed,
+      stillProcessing: result.stillProcessing,
+      errors: result.errors.length,
     });
+    if (result.errors.length > 0) {
+      console.error("[Cron/process-videos] Errors:", result.errors);
+    }
+
+    return NextResponse.json({ success: true, ...result });
   } catch (error) {
-    console.error("Video processing cron error:", error);
+    console.error("[Cron/process-videos] Fatal error:", error);
     return NextResponse.json(
       {
         error:

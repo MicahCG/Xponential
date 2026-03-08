@@ -167,7 +167,8 @@ export async function POST(request: NextRequest) {
       }
       accountId = user.data.id;
       followersCount = user.data.public_metrics?.followers_count;
-    } catch {
+    } catch (err) {
+      console.error(`[watched-accounts] Failed to verify @${handle} on X:`, err);
       return NextResponse.json(
         { error: `Could not verify @${handle} on X` },
         { status: 400 }

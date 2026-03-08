@@ -12,9 +12,19 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await pollEngagement();
+
+    console.log("[Cron/poll-engagement] Result:", {
+      usersProcessed: result.usersProcessed,
+      postsUpdated: result.postsUpdated,
+      errors: result.errors.length,
+    });
+    if (result.errors.length > 0) {
+      console.error("[Cron/poll-engagement] Errors:", result.errors);
+    }
+
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
-    console.error("poll-engagement cron error:", error);
+    console.error("[Cron/poll-engagement] Fatal error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Cron job failed" },
       { status: 500 }
