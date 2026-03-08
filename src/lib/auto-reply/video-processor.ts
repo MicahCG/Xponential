@@ -207,15 +207,19 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
 
       if (replyMode === "auto") {
         try {
-          const tweetText = log.replyContent || ".";
+          // Popcorn returns HLS manifests (.m3u8), not direct MP4 files.
+          // Twitter's media upload API only accepts MP4, so we can't pass the
+          // video URL to Apify as media. Post as a text reply instead.
+          // TODO: Once Popcorn exposes an MP4 URL field, use it for native video.
+          const tweetText = (log.replyContent || "").slice(0, 280) || ".";
 
-          // Start the Apify run ASYNC — don't block waiting 5 minutes.
+          // Start the Apify run ASYNC — don't block waiting.
           // The run ID is stored and checked in Phase 3 next cron cycle.
           const { runId } = await startTweetViaApify(
             log.userId,
             tweetText,
-            log.targetTweetId,
-            videoUrl
+            log.targetTweetId
+            // No mediaUrl — HLS streams can't be uploaded to Twitter
           );
 
           await prisma.autoReplyLog.update({

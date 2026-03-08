@@ -160,6 +160,9 @@ export async function getMovieUrl(movieRootId: string): Promise<MovieUrl> {
     );
   }
 
-  return (await res.json()) as MovieUrl;
+  const raw = await res.json();
+  // Log full response so we can discover all available URL fields (mp4, hls, etc.)
+  console.log("[Popcorn] getMovieUrl response:", JSON.stringify(raw));
+  return raw as MovieUrl;
 }
 
