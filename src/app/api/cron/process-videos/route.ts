@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
     console.log("[Cron/process-videos] Result:", {
       kicked: result.kicked,
       ready: result.ready,
+      posting: result.posting,
       posted: result.posted,
       failed: result.failed,
       stillProcessing: result.stillProcessing,

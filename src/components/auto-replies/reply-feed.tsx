@@ -262,6 +262,12 @@ function ReplyLogCard({
       className:
         "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
     },
+    posting_video: {
+      icon: <Loader2 className="h-3 w-3 animate-spin" />,
+      label: "Posting video...",
+      className:
+        "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+    },
     posting: {
       icon: <Loader2 className="h-3 w-3 animate-spin" />,
       label: "Posting...",

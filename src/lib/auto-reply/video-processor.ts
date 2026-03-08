@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { createMovie, getMovieStatus, getMovieUrl } from "@/lib/video/popcorn";
 import { generateContent } from "@/lib/content/generator";
-import { postTweetWithRetry, XPostError } from "@/lib/platform/x-client";
+import { startTweetViaApify, checkApifyRun } from "@/lib/platform/apify-poster";
 
 export interface VideoProcessResult {
   kicked: number;
@@ -9,6 +9,7 @@ export interface VideoProcessResult {
   posted: number;
   failed: number;
   stillProcessing: number;
+  posting: number;
   errors: string[];
 }
 
@@ -55,6 +56,7 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
     posted: 0,
     failed: 0,
     stillProcessing: 0,
+    posting: 0,
     errors: [],
   };
 
@@ -207,7 +209,9 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
         try {
           const tweetText = log.replyContent || ".";
 
-          const posted = await postTweetWithRetry(
+          // Start the Apify run ASYNC — don't block waiting 5 minutes.
+          // The run ID is stored and checked in Phase 3 next cron cycle.
+          const { runId } = await startTweetViaApify(
             log.userId,
             tweetText,
             log.targetTweetId,
@@ -218,49 +222,23 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
             where: { id: log.id },
             data: {
               videoUrl,
-              replyTweetId: posted.id,
-              status: "posted",
-              postedAt: new Date(),
+              apifyRunId: runId,
+              status: "posting_video",
             },
           });
 
-          await prisma.postHistory.create({
-            data: {
-              userId: log.userId,
-              platform: "x",
-              postType: "reply",
-              content: log.replyContent || "",
-              targetPostId: log.targetTweetId,
-              targetAuthor: log.targetAuthor,
-              videoUrl,
-              videoFormat: "mp4",
-              platformPostId: posted.id,
-            },
-          });
-
-          result.posted++;
+          result.posting++;
           console.log(
-            `[VideoProcessor] Video reply posted for log ${log.id}: tweet ${posted.id}`
+            `[VideoProcessor] Video post started for log ${log.id}: apifyRunId=${runId}`
           );
         } catch (postErr) {
-          const isRetryable =
-            postErr instanceof XPostError &&
-            (postErr.isAuthError ||
-              postErr.isRateLimit ||
-              postErr.isTokenExpired);
-
-          // Save the video URL even if posting fails so we don't regenerate
-          await prisma.autoReplyLog.update({
-            where: { id: log.id },
-            data: {
-              videoUrl,
-              status: isRetryable ? "pending" : "failed",
-            },
-          });
-
           const msg =
             postErr instanceof Error ? postErr.message : "Unknown post error";
-          result.errors.push(`Log ${log.id} (post): ${msg}`);
+          await prisma.autoReplyLog.update({
+            where: { id: log.id },
+            data: { videoUrl, status: "failed", errorMessage: msg },
+          });
+          result.errors.push(`Log ${log.id} (start post): ${msg}`);
           result.failed++;
         }
       } else {
@@ -288,6 +266,95 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
         `[VideoProcessor] Failed to check status for log ${log.id}:`,
         err
       );
+    }
+  }
+
+  // ── Phase 3: Check Apify run results for "posting_video" logs ──
+
+  const postingLogs = await prisma.autoReplyLog.findMany({
+    where: {
+      replyType: "video",
+      status: "posting_video",
+      apifyRunId: { not: null },
+    },
+    include: { watchedAccount: true },
+    orderBy: { createdAt: "asc" },
+    take: 10,
+  });
+
+  for (const log of postingLogs) {
+    try {
+      // Timeout: if a run has been "posting_video" for >45 minutes, give up
+      const ageMs = Date.now() - new Date(log.generationStartedAt ?? log.createdAt).getTime();
+      if (ageMs > 45 * 60 * 1000) {
+        const timeoutMsg = `Video posting timed out after ${Math.round(ageMs / 60000)} minutes`;
+        await prisma.autoReplyLog.update({
+          where: { id: log.id },
+          data: { status: "failed", errorMessage: timeoutMsg },
+        });
+        result.failed++;
+        result.errors.push(`Log ${log.id}: ${timeoutMsg}`);
+        continue;
+      }
+
+      const check = await checkApifyRun(log.apifyRunId!);
+
+      if (check.status === "running") {
+        result.stillProcessing++;
+        console.log(`[VideoProcessor] Log ${log.id} still posting via Apify (runId=${log.apifyRunId})`);
+        continue;
+      }
+
+      if (check.status === "failed") {
+        const msg = check.errorMessage ?? "Apify run failed";
+        await prisma.autoReplyLog.update({
+          where: { id: log.id },
+          data: { status: "failed", errorMessage: msg },
+        });
+        result.errors.push(`Log ${log.id} (apify): ${msg}`);
+        result.failed++;
+        console.error(`[VideoProcessor] Apify run failed for log ${log.id}: ${msg}`);
+        continue;
+      }
+
+      // Succeeded — record the posted tweet
+      const tweetId = check.tweetId!;
+      await prisma.autoReplyLog.update({
+        where: { id: log.id },
+        data: {
+          replyTweetId: tweetId,
+          status: "posted",
+          postedAt: new Date(),
+        },
+      });
+
+      await prisma.postHistory.create({
+        data: {
+          userId: log.userId,
+          platform: "x",
+          postType: "reply",
+          content: log.replyContent || "",
+          targetPostId: log.targetTweetId,
+          targetAuthor: log.targetAuthor,
+          videoUrl: log.videoUrl ?? undefined,
+          videoFormat: "mp4",
+          platformPostId: tweetId,
+        },
+      });
+
+      result.posted++;
+      console.log(
+        `[VideoProcessor] Video reply posted for log ${log.id}: tweet ${tweetId}`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      await prisma.autoReplyLog.update({
+        where: { id: log.id },
+        data: { status: "failed", errorMessage: msg },
+      });
+      result.errors.push(`Log ${log.id} (phase3): ${msg}`);
+      result.failed++;
+      console.error(`[VideoProcessor] Phase 3 error for log ${log.id}:`, err);
     }
   }
 

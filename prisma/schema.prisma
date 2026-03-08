@@ -257,6 +257,7 @@ model AutoReplyLog {
   replyTweetId        String?   @map("reply_tweet_id")
   videoUrl            String?   @map("video_url")
   movieRootId         String?   @map("movie_root_id")
+  apifyRunId          String?   @map("apify_run_id")
   status              String    @default("pending")
   errorMessage        String?   @map("error_message") @db.Text
   generationStartedAt DateTime? @map("generation_started_at")

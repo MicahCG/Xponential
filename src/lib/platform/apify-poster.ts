@@ -61,6 +61,142 @@ async function getTwitterCookie(userId: string): Promise<string> {
  *   - delegated_username: Delegated account username
  *   - schedule: Scheduled send time (Europe/London UTC+0, e.g. "2025-02-11 10:37:00")
  */
+/**
+ * Starts a tweet post via Apify WITHOUT waiting for completion.
+ * Returns immediately with the Apify run ID for later polling.
+ * Use checkApifyRun() to get the result.
+ */
+export async function startTweetViaApify(
+  userId: string,
+  text: string,
+  replyToId?: string,
+  mediaUrl?: string
+): Promise<{ runId: string }> {
+  if (!text || text.trim().length === 0) {
+    throw new XPostError({ message: "Tweet text cannot be empty." });
+  }
+  if (text.length > 280) {
+    throw new XPostError({
+      message: `Tweet text too long (${text.length}/280 characters).`,
+    });
+  }
+
+  const cookie = await getTwitterCookie(userId);
+  const token = getApifyToken();
+
+  const input: Record<string, string> = { cookie, tweetContent: text };
+  if (replyToId) input.replyTweetId = replyToId;
+  if (mediaUrl) input.mediaUrl = mediaUrl;
+
+  console.log(
+    `[Apify] Starting async tweet run...`,
+    replyToId ? `(reply to ${replyToId})` : "(original tweet)",
+    mediaUrl ? `[video: ${mediaUrl.slice(0, 60)}...]` : ""
+  );
+
+  // Start async — no waitForFinish, returns immediately with run ID
+  const runUrl = `${APIFY_API_BASE}/acts/${APIFY_ACTOR_ID}/runs?token=${token}`;
+  const runResponse = await fetch(runUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  if (!runResponse.ok) {
+    const errBody = await runResponse.text();
+    throw new XPostError({
+      message: `Apify API error (HTTP ${runResponse.status}): ${errBody}`,
+      rawErrors: { status: runResponse.status, body: errBody },
+    });
+  }
+
+  const run = await runResponse.json();
+  const runId = run.data?.id;
+  if (!runId) {
+    throw new XPostError({
+      message: "Apify did not return a run ID.",
+      rawErrors: run,
+    });
+  }
+
+  console.log(`[Apify] Run started: runId=${runId}`);
+  return { runId };
+}
+
+/**
+ * Checks the status of an Apify run and returns the tweet ID if completed.
+ * Returns "running" if still in progress, "succeeded" with tweetId, or "failed".
+ */
+export async function checkApifyRun(runId: string): Promise<{
+  status: "running" | "succeeded" | "failed";
+  tweetId?: string;
+  errorMessage?: string;
+}> {
+  const token = getApifyToken();
+
+  const runResponse = await fetch(
+    `${APIFY_API_BASE}/actor-runs/${runId}?token=${token}`
+  );
+  if (!runResponse.ok) {
+    const errBody = await runResponse.text();
+    return {
+      status: "failed",
+      errorMessage: `Could not check run status: HTTP ${runResponse.status} ${errBody}`,
+    };
+  }
+
+  const run = await runResponse.json();
+  const runStatus: string = run.data?.status ?? "UNKNOWN";
+
+  console.log(`[Apify] Run ${runId} status: ${runStatus}`);
+
+  if (["FAILED", "ABORTED", "TIMED-OUT"].includes(runStatus)) {
+    return { status: "failed", errorMessage: `Apify run ${runStatus.toLowerCase()}` };
+  }
+
+  if (runStatus !== "SUCCEEDED") {
+    // Still READY or RUNNING
+    return { status: "running" };
+  }
+
+  // SUCCEEDED — fetch dataset to get tweet ID
+  const datasetId = run.data?.defaultDatasetId;
+  if (!datasetId) {
+    return { status: "failed", errorMessage: "Run succeeded but no dataset ID" };
+  }
+
+  const datasetResponse = await fetch(
+    `${APIFY_API_BASE}/datasets/${datasetId}/items?token=${token}`
+  );
+  if (!datasetResponse.ok) {
+    return { status: "failed", errorMessage: "Could not fetch dataset" };
+  }
+
+  const items = (await datasetResponse.json()) as Record<string, unknown>[];
+  console.log(`[Apify] Run ${runId} dataset items:`, items);
+
+  if (items.length === 0) {
+    return { status: "failed", errorMessage: "Apify run succeeded but returned no items" };
+  }
+
+  const result = items[0];
+  const tweetId =
+    (result.tweet_id as string) ??
+    (result.tweetId as string) ??
+    (result.id as string);
+
+  if (!tweetId) {
+    // Check for error message
+    const errMsg = result.status_message as string | undefined;
+    return {
+      status: "failed",
+      errorMessage: errMsg ?? "Apify returned no tweet ID",
+    };
+  }
+
+  return { status: "succeeded", tweetId };
+}
+
 export async function postTweetViaApify(
   userId: string,
   text: string,
