@@ -9,6 +9,7 @@ import {
   type FeedbackExample,
 } from "./prompts";
 import { buildMemoryContext } from "./memory";
+import { getRecentLearnings } from "@/lib/learning/injector";
 import { DEFAULT_GENERATION_COUNT } from "@/lib/constants";
 
 const GENERATION_SYSTEM_PROMPT = `You are a content generation engine for social media. Your job is to produce content that perfectly matches a given personality profile.
@@ -78,11 +79,10 @@ export async function generateContent(
 
   const { personality: profile, replyInstructions, feedbackExamples } = activeProfile;
   const count = request.count ?? DEFAULT_GENERATION_COUNT;
-  const memoryContext = await buildMemoryContext(
-    userId,
-    request.platform,
-    request.targetAuthor
-  );
+  const [memoryContext, learnings] = await Promise.all([
+    buildMemoryContext(userId, request.platform, request.targetAuthor),
+    getRecentLearnings(userId, request.platform),
+  ]);
 
   let prompt: string;
 
@@ -100,6 +100,7 @@ export async function generateContent(
         count,
         replyInstructions,
         feedbackExamples,
+        learnings,
       });
       break;
 
@@ -116,6 +117,7 @@ export async function generateContent(
         count,
         replyInstructions,
         feedbackExamples,
+        learnings,
       });
       break;
 
@@ -132,6 +134,7 @@ export async function generateContent(
         additionalContext: request.additionalContext,
         replyInstructions,
         feedbackExamples,
+        learnings,
       });
       break;
   }

@@ -7,6 +7,14 @@
     {
       "path": "/api/cron/process-videos",
       "schedule": "*/3 * * * *"
+    },
+    {
+      "path": "/api/cron/poll-engagement",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/daily-learning",
+      "schedule": "0 23 * * *"
     }
   ]
 }

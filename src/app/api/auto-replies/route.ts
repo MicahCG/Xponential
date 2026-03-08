@@ -12,10 +12,20 @@ export async function GET() {
     where: { userId: session.user.id },
     orderBy: { createdAt: "desc" },
     take: 20,
-    include: {
-      watchedAccount: {
-        select: { accountHandle: true },
-      },
+    select: {
+      id: true,
+      targetTweetId: true,
+      targetTweetText: true,
+      targetAuthor: true,
+      replyContent: true,
+      replyType: true,
+      replyTweetId: true,
+      videoUrl: true,
+      status: true,
+      errorMessage: true,
+      createdAt: true,
+      postedAt: true,
+      watchedAccount: { select: { accountHandle: true } },
     },
   });
 

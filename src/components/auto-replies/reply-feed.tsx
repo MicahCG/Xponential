@@ -33,6 +33,7 @@ interface AutoReplyLog {
   replyTweetId: string | null;
   videoUrl: string | null;
   status: string;
+  errorMessage: string | null;
   createdAt: string;
   postedAt: string | null;
   watchedAccount: { accountHandle: string };
@@ -323,6 +324,12 @@ function ReplyLogCard({
         <div className="flex items-center gap-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Video is being generated... this usually takes 5–15 minutes.
+        </div>
+      )}
+
+      {reply.status === "failed" && reply.errorMessage && (
+        <div className="rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-3 py-2 text-xs text-red-700 dark:text-red-400">
+          <span className="font-medium">Error: </span>{reply.errorMessage}
         </div>
       )}
 

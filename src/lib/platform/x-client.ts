@@ -606,3 +606,52 @@ export async function postTweet(
     });
   }
 }
+
+export interface TweetMetrics {
+  likes: number;
+  retweets: number;
+  replies: number;
+  impressions: number;
+  bookmarks: number;
+}
+
+/**
+ * Fetches public_metrics for a batch of tweet IDs using the authenticated user's token.
+ * Returns a map of tweetId → metrics. Missing tweets are omitted from the map.
+ */
+export async function getTweetMetrics(
+  accessToken: string,
+  tweetIds: string[]
+): Promise<Map<string, TweetMetrics>> {
+  if (tweetIds.length === 0) return new Map();
+
+  const client = createXClient(accessToken);
+  const results = new Map<string, TweetMetrics>();
+
+  // Twitter v2 allows max 100 IDs per request
+  const chunks: string[][] = [];
+  for (let i = 0; i < tweetIds.length; i += 100) {
+    chunks.push(tweetIds.slice(i, i + 100));
+  }
+
+  for (const chunk of chunks) {
+    const response = await client.v2.tweets(chunk, {
+      "tweet.fields": ["public_metrics"],
+    });
+
+    for (const tweet of response.data ?? []) {
+      const m = tweet.public_metrics;
+      if (m) {
+        results.set(tweet.id, {
+          likes: m.like_count ?? 0,
+          retweets: m.retweet_count ?? 0,
+          replies: m.reply_count ?? 0,
+          impressions: m.impression_count ?? 0,
+          bookmarks: m.bookmark_count ?? 0,
+        });
+      }
+    }
+  }
+
+  return results;
+}

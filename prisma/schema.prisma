@@ -28,6 +28,7 @@ model User {
   contentQueue        ContentQueue[]
   watchedAccounts     WatchedAccount[]
   autoReplyLogs       AutoReplyLog[]
+  contentLearnings    ContentLearning[]
 
   @@map("users")
 }
@@ -155,19 +156,20 @@ enum Barrel {
 }
 
 model PostHistory {
-  id             String   @id @default(cuid())
-  userId         String   @map("user_id")
-  platform       Platform
-  postType       PostType @map("post_type")
-  barrel         Barrel   @default(original)
-  content        String   @db.Text
-  targetPostId   String?  @map("target_post_id")
-  targetAuthor   String?  @map("target_author")
-  videoUrl       String?  @map("video_url")
-  videoFormat    String?  @map("video_format")
-  platformPostId String?  @map("platform_post_id")
-  postedAt       DateTime @default(now()) @map("posted_at")
-  engagement     Json     @default("{}")
+  id               String    @id @default(cuid())
+  userId           String    @map("user_id")
+  platform         Platform
+  postType         PostType  @map("post_type")
+  barrel           Barrel    @default(original)
+  content          String    @db.Text
+  targetPostId     String?   @map("target_post_id")
+  targetAuthor     String?   @map("target_author")
+  videoUrl         String?   @map("video_url")
+  videoFormat      String?   @map("video_format")
+  platformPostId   String?   @map("platform_post_id")
+  postedAt         DateTime  @default(now()) @map("posted_at")
+  engagement       Json      @default("{}")
+  metricsUpdatedAt DateTime? @map("metrics_updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -226,6 +228,23 @@ model WatchedAccount {
   @@map("watched_accounts")
 }
 
+model ContentLearning {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  date          DateTime @db.Date
+  platform      Platform
+  insights      Json
+  rawAnalysis   String   @map("raw_analysis") @db.Text
+  postsAnalyzed Int      @default(0) @map("posts_analyzed")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, platform, date])
+  @@index([userId, platform, date])
+  @@map("content_learnings")
+}
+
 model AutoReplyLog {
   id               String    @id @default(cuid())
   userId           String    @map("user_id")
@@ -235,12 +254,14 @@ model AutoReplyLog {
   targetAuthor     String    @map("target_author")
   replyContent     String    @map("reply_content") @db.Text
   replyType        String    @default("text") @map("reply_type")
-  replyTweetId     String?   @map("reply_tweet_id")
-  videoUrl         String?   @map("video_url")
-  movieRootId      String?   @map("movie_root_id")
-  status           String    @default("pending")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  postedAt         DateTime? @map("posted_at")
+  replyTweetId        String?   @map("reply_tweet_id")
+  videoUrl            String?   @map("video_url")
+  movieRootId         String?   @map("movie_root_id")
+  status              String    @default("pending")
+  errorMessage        String?   @map("error_message") @db.Text
+  generationStartedAt DateTime? @map("generation_started_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  postedAt            DateTime? @map("posted_at")
 
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   watchedAccount WatchedAccount @relation(fields: [watchedAccountId], references: [id], onDelete: Cascade)

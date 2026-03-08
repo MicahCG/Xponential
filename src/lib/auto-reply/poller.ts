@@ -113,8 +113,23 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
         for (const tweet of tweetsToReply) {
           try {
             if (account.replyType === "video") {
+              // Guard: skip video queueing if Popcorn isn't configured
+              const popcornConfigured = !!(process.env.POPCORN_API_URL && process.env.MCP_API_KEY);
+              const userSettings = (await prisma.user.findUnique({
+                where: { id: userId },
+                select: { settings: true },
+              }))?.settings as Record<string, unknown> | null;
+              const popcornUserId = userSettings?.popcornUserId as string | undefined;
+
+              if (!popcornConfigured || !popcornUserId) {
+                result.errors.push(
+                  `@${account.accountHandle}: Skipping video reply — ${!popcornUserId ? "Popcorn User ID not set in Settings" : "POPCORN_API_URL/KEY env vars missing"}`
+                );
+                continue;
+              }
+
               // For video replies, queue a pending log entry.
-              // The Popcorn video generation and posting flow can hook into these logs.
+              // The Popcorn video generation and posting flow hooks into these logs.
               result.repliesGenerated++;
 
               await prisma.autoReplyLog.create({

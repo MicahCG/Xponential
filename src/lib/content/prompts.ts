@@ -25,6 +25,11 @@ function instructionsBlock(instructions: string | null | undefined): string {
   return `\nIMPORTANT — The user has provided these specific instructions for how they want their content to sound:\n"${instructions}"\nFollow these instructions closely. They override the personality profile where they conflict.\n`;
 }
 
+function learningsBlock(learnings: string | null | undefined): string {
+  if (!learnings) return "";
+  return `\n${learnings}\n`;
+}
+
 function examplesBlock(examples: FeedbackExample[] | null | undefined): string {
   if (!examples || examples.length === 0) return "";
 
@@ -59,6 +64,7 @@ export function buildReplyPrompt(params: {
   count: number;
   replyInstructions?: string | null;
   feedbackExamples?: FeedbackExample[] | null;
+  learnings?: string | null;
 }) {
   const charLimit =
     params.platform === "x" ? X_CHAR_LIMIT : LINKEDIN_CHAR_LIMIT;
@@ -71,7 +77,7 @@ export function buildReplyPrompt(params: {
 
 ${serializeProfile(params.personality)}
 ${platformProfile ? `\nPlatform-specific adjustments: ${JSON.stringify(platformProfile)}` : ""}
-${instructionsBlock(params.replyInstructions)}${examplesBlock(params.feedbackExamples)}
+${instructionsBlock(params.replyInstructions)}${examplesBlock(params.feedbackExamples)}${learningsBlock(params.learnings)}
 They are replying to this post by @${params.targetAuthor}:
 "${params.targetPost}"
 
@@ -97,6 +103,7 @@ export function buildOriginalPostPrompt(params: {
   additionalContext?: string;
   replyInstructions?: string | null;
   feedbackExamples?: FeedbackExample[] | null;
+  learnings?: string | null;
 }) {
   const charLimit =
     params.platform === "x" ? X_CHAR_LIMIT : LINKEDIN_CHAR_LIMIT;
@@ -104,7 +111,7 @@ export function buildOriginalPostPrompt(params: {
   return `You are ghostwriting an original ${params.platform === "x" ? "tweet" : "LinkedIn post"} for someone with this voice:
 
 ${serializeProfile(params.personality)}
-${instructionsBlock(params.replyInstructions)}${examplesBlock(params.feedbackExamples)}
+${instructionsBlock(params.replyInstructions)}${examplesBlock(params.feedbackExamples)}${learningsBlock(params.learnings)}
 Topic: ${params.topic}
 ${params.additionalContext ? `Additional context: ${params.additionalContext}` : ""}
 
@@ -130,6 +137,7 @@ export function buildQuotePrompt(params: {
   count: number;
   replyInstructions?: string | null;
   feedbackExamples?: FeedbackExample[] | null;
+  learnings?: string | null;
 }) {
   const charLimit =
     params.platform === "x" ? X_CHAR_LIMIT : LINKEDIN_CHAR_LIMIT;
@@ -137,7 +145,7 @@ export function buildQuotePrompt(params: {
   return `You are ghostwriting a quote-${params.platform === "x" ? "tweet" : "post"} commentary for someone with this voice:
 
 ${serializeProfile(params.personality)}
-${instructionsBlock(params.replyInstructions)}${examplesBlock(params.feedbackExamples)}
+${instructionsBlock(params.replyInstructions)}${examplesBlock(params.feedbackExamples)}${learningsBlock(params.learnings)}
 They are quote-sharing this post by @${params.targetAuthor}:
 "${params.targetPost}"
 

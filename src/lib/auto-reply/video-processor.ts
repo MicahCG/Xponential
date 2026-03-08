@@ -124,6 +124,8 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
           movieRootId: movie.movieRootId,
           replyContent: caption,
           status: "generating_video",
+          generationStartedAt: new Date(),
+          errorMessage: null,
         },
       });
 
@@ -132,11 +134,11 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
         `[VideoProcessor] Kicked off video for log ${log.id}: movieRootId=${movie.movieRootId}`
       );
     } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
       await prisma.autoReplyLog.update({
         where: { id: log.id },
-        data: { status: "failed" },
+        data: { status: "failed", errorMessage: msg },
       });
-      const msg = err instanceof Error ? err.message : "Unknown error";
       result.errors.push(`Log ${log.id} (kick off): ${msg}`);
       result.failed++;
       console.error(`[VideoProcessor] Failed to kick off log ${log.id}:`, err);
@@ -158,21 +160,19 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
 
   for (const log of inProgressLogs) {
     try {
-      // Check if this job has been stuck for too long (>25 minutes)
-      const ageMs = Date.now() - new Date(log.createdAt).getTime();
-      const maxAgeMs = 25 * 60 * 1000;
+      // Check if this job has been stuck for too long (>30 minutes from when Popcorn was called)
+      const generationStart = log.generationStartedAt ?? log.createdAt;
+      const ageMs = Date.now() - new Date(generationStart).getTime();
+      const maxAgeMs = 30 * 60 * 1000;
       if (ageMs > maxAgeMs) {
+        const timeoutMsg = `Video generation timed out after ${Math.round(ageMs / 60000)} minutes`;
         await prisma.autoReplyLog.update({
           where: { id: log.id },
-          data: { status: "failed" },
+          data: { status: "failed", errorMessage: timeoutMsg },
         });
         result.failed++;
-        result.errors.push(
-          `Log ${log.id}: Video generation timed out after ${Math.round(ageMs / 60000)} minutes`
-        );
-        console.error(
-          `[VideoProcessor] Video timed out for log ${log.id} (${Math.round(ageMs / 60000)}m)`
-        );
+        result.errors.push(`Log ${log.id}: ${timeoutMsg}`);
+        console.error(`[VideoProcessor] ${timeoutMsg} for log ${log.id}`);
         continue;
       }
 
@@ -277,11 +277,11 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
         );
       }
     } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
       await prisma.autoReplyLog.update({
         where: { id: log.id },
-        data: { status: "failed" },
+        data: { status: "failed", errorMessage: msg },
       });
-      const msg = err instanceof Error ? err.message : "Unknown error";
       result.errors.push(`Log ${log.id} (check): ${msg}`);
       result.failed++;
       console.error(

@@ -7,16 +7,16 @@
  */
 
 const POPCORN_API_URL = process.env.POPCORN_API_URL;
-const POPCORN_API_KEY = process.env.POPCORN_API_KEY;
+const MCP_API_KEY = process.env.MCP_API_KEY;
 
 function getConfig() {
   if (!POPCORN_API_URL) {
     throw new Error("POPCORN_API_URL is not configured. Add it to your environment variables.");
   }
-  if (!POPCORN_API_KEY) {
-    throw new Error("POPCORN_API_KEY is not configured. Add it to your environment variables.");
+  if (!MCP_API_KEY) {
+    throw new Error("MCP_API_KEY is not configured. Add it to your environment variables.");
   }
-  return { apiUrl: POPCORN_API_URL, apiKey: POPCORN_API_KEY };
+  return { apiUrl: POPCORN_API_URL, apiKey: MCP_API_KEY };
 }
 
 // ─── Types ──────────────────────────────────────────────────
