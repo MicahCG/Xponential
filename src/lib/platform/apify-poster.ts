@@ -96,14 +96,20 @@ export async function postTweetViaApify(
     input.mediaUrl = mediaUrl;
   }
 
+  // Video uploads require more time: Apify must download the file, upload to
+  // Twitter's media API (chunked), wait for processing, then post.
+  // Use 300s for video, 60s for text-only.
+  const waitForFinish = mediaUrl ? 300 : 60;
+
   console.log(
     `[Apify] Posting tweet via Apify actor...`,
-    replyToId ? `(reply to ${replyToId})` : "(original tweet)"
+    replyToId ? `(reply to ${replyToId})` : "(original tweet)",
+    mediaUrl ? `[video: ${mediaUrl.slice(0, 60)}... waitForFinish=${waitForFinish}s]` : ""
   );
 
   try {
-    // Step 1: Start the actor run and wait for it to finish (up to 60s)
-    const runUrl = `${APIFY_API_BASE}/acts/${APIFY_ACTOR_ID}/runs?token=${token}&waitForFinish=60`;
+    // Step 1: Start the actor run and wait for it to finish
+    const runUrl = `${APIFY_API_BASE}/acts/${APIFY_ACTOR_ID}/runs?token=${token}&waitForFinish=${waitForFinish}`;
     const runResponse = await fetch(runUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
