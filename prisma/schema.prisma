@@ -29,6 +29,7 @@ model User {
   watchedAccounts     WatchedAccount[]
   autoReplyLogs       AutoReplyLog[]
   contentLearnings    ContentLearning[]
+  followerSnapshots   FollowerSnapshot[]
 
   @@map("users")
 }
@@ -243,6 +244,19 @@ model ContentLearning {
   @@unique([userId, platform, date])
   @@index([userId, platform, date])
   @@map("content_learnings")
+}
+
+model FollowerSnapshot {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  platform    Platform
+  followers   Int
+  capturedAt  DateTime @default(now()) @map("captured_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, platform, capturedAt])
+  @@map("follower_snapshots")
 }
 
 model AutoReplyLog {

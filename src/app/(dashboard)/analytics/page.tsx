@@ -16,6 +16,7 @@ import {
   Users,
 } from "lucide-react";
 import { EngagementChart } from "@/components/analytics/engagement-chart";
+import { FollowerChart } from "@/components/analytics/follower-chart";
 import { format, eachWeekOfInterval, startOfWeek } from "date-fns";
 
 interface EngagementData {
@@ -41,7 +42,7 @@ export default async function AnalyticsPage() {
   const session = await requireAuth();
   const userId = session.user!.id!;
 
-  const [connection, posts, autoRepliesPosted, watchedAccounts] =
+  const [connection, posts, autoRepliesPosted, watchedAccounts, followerSnapshots] =
     await Promise.all([
       prisma.platformConnection.findFirst({
         where: { userId, platform: "x" },
@@ -71,25 +72,33 @@ export default async function AnalyticsPage() {
         },
         orderBy: { followersCount: "desc" },
       }),
+      prisma.followerSnapshot.findMany({
+        where: { userId, platform: "x" },
+        select: { followers: true, capturedAt: true },
+        orderBy: { capturedAt: "asc" },
+      }),
     ]);
 
-  // ── Aggregate totals ──────────────────────────────────────────
+  // ── Aggregate totals (replies only) ──────────────────────────
+  const replyPosts = posts.filter((p) => p.postType === "reply");
   let totalLikes = 0;
-  let totalRetweets = 0;
   let totalReplies = 0;
   let totalImpressions = 0;
-  let totalBookmarks = 0;
 
-  for (const post of posts) {
+  for (const post of replyPosts) {
     const e = parseEngagement(post.engagement);
     totalLikes += e.likes ?? 0;
-    totalRetweets += e.retweets ?? 0;
     totalReplies += e.replies ?? 0;
     totalImpressions += e.impressions ?? 0;
-    totalBookmarks += e.bookmarks ?? 0;
   }
 
-  // ── Weekly chart data (last 12 weeks or since joined) ────────
+  // ── Follower chart data ───────────────────────────────────────
+  const followerData = followerSnapshots.map((s) => ({
+    date: format(new Date(s.capturedAt), "MMM d"),
+    followers: s.followers,
+  }));
+
+  // ── Weekly activity chart (last 12 weeks) ────────────────────
   const memberSince = connection?.connectedAt
     ? new Date(connection.connectedAt)
     : new Date(Date.now() - 12 * 7 * 24 * 60 * 60 * 1000);
@@ -98,9 +107,10 @@ export default async function AnalyticsPage() {
     Math.max(memberSince.getTime(), Date.now() - 12 * 7 * 24 * 60 * 60 * 1000)
   );
 
-  const weeks = eachWeekOfInterval(
-    { start: startOfWeek(chartStart), end: new Date() },
-  );
+  const weeks = eachWeekOfInterval({
+    start: startOfWeek(chartStart),
+    end: new Date(),
+  });
 
   const weeklyData = weeks.map((weekStart) => {
     const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -124,32 +134,13 @@ export default async function AnalyticsPage() {
     };
   });
 
-  // ── Top 5 posts by total engagement ──────────────────────────
-  const topPosts = posts
+  // ── Top replies by impressions then likes ─────────────────────
+  const topReplies = replyPosts
     .map((p) => {
       const e = parseEngagement(p.engagement);
       return {
         ...p,
         likes: e.likes ?? 0,
-        retweets: e.retweets ?? 0,
-        repliesCount: e.replies ?? 0,
-        impressions: e.impressions ?? 0,
-        total: (e.likes ?? 0) + (e.retweets ?? 0) + (e.replies ?? 0),
-      };
-    })
-    .filter((p) => p.total > 0)
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 5);
-
-  // ── Top replies by views then likes ──────────────────────────
-  const topReplies = posts
-    .filter((p) => p.postType === "reply")
-    .map((p) => {
-      const e = parseEngagement(p.engagement);
-      return {
-        ...p,
-        likes: e.likes ?? 0,
-        retweets: e.retweets ?? 0,
         repliesCount: e.replies ?? 0,
         impressions: e.impressions ?? 0,
       };
@@ -175,78 +166,45 @@ export default async function AnalyticsPage() {
       </div>
 
       {/* ── Summary stat cards ── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <StatCard title="Total Posts" value={fmt(posts.length)} icon={<MessageCircle className="h-4 w-4 text-muted-foreground" />} />
-        <StatCard title="Likes" value={fmt(totalLikes)} icon={<Heart className="h-4 w-4 text-rose-400" />} />
-        <StatCard title="Retweets" value={fmt(totalRetweets)} icon={<Repeat2 className="h-4 w-4 text-green-400" />} />
-        <StatCard title="Replies" value={fmt(totalReplies)} icon={<MessageCircle className="h-4 w-4 text-blue-400" />} />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard title="Auto-Replies Posted" value={fmt(autoRepliesPosted)} icon={<Bot className="h-4 w-4 text-purple-400" />} />
         <StatCard title="Impressions" value={fmt(totalImpressions)} icon={<Eye className="h-4 w-4 text-muted-foreground" />} />
-        <StatCard title="Auto-Replies" value={fmt(autoRepliesPosted)} icon={<Bot className="h-4 w-4 text-purple-400" />} />
+        <StatCard title="Likes on Replies" value={fmt(totalLikes)} icon={<Heart className="h-4 w-4 text-rose-400" />} />
+        <StatCard title="Replies to Replies" value={fmt(totalReplies)} icon={<MessageCircle className="h-4 w-4 text-blue-400" />} />
       </div>
 
-      {/* ── Engagement chart ── */}
+      {/* ── Follower growth chart ── */}
+      <FollowerChart data={followerData} />
+
+      {/* ── Activity over time chart ── */}
       <EngagementChart data={weeklyData} />
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* ── Top posts ── */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Top Posts by Engagement</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {topPosts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No engagement data yet.</p>
-            ) : (
-              topPosts.map((post) => (
-                <div key={post.id} className="space-y-1">
-                  <p className="text-sm line-clamp-2 leading-snug">{post.content}</p>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    {post.targetAuthor && (
-                      <span className="text-muted-foreground/60">→ @{post.targetAuthor}</span>
-                    )}
-                    <span className="flex items-center gap-1">
-                      <Heart className="h-3 w-3 text-rose-400" /> {post.likes}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Repeat2 className="h-3 w-3 text-green-400" /> {post.retweets}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <MessageCircle className="h-3 w-3 text-blue-400" /> {post.repliesCount}
-                    </span>
-                  </div>
+      {/* ── Watched accounts ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">Watched Accounts</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {watchedAccounts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No watched accounts yet.</p>
+          ) : (
+            watchedAccounts.map((acct) => (
+              <div key={acct.accountHandle} className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-sm font-medium">@{acct.accountHandle}</span>
                 </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        {/* ── Watched accounts ── */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Watched Accounts</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {watchedAccounts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No watched accounts yet.</p>
-            ) : (
-              watchedAccounts.map((acct) => (
-                <div key={acct.accountHandle} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-sm font-medium">@{acct.accountHandle}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>{fmt(acct.followersCount ?? 0)} followers</span>
-                    <Badge variant="outline" className="text-xs">
-                      {acct.replyCount} replies
-                    </Badge>
-                  </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>{fmt(acct.followersCount ?? 0)} followers</span>
+                  <Badge variant="outline" className="text-xs">
+                    {acct.replyCount} replies
+                  </Badge>
                 </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
 
       {/* ── Best performing replies ── */}
       <Card>
@@ -261,10 +219,7 @@ export default async function AnalyticsPage() {
           ) : (
             <div className="space-y-4">
               {topReplies.map((reply, i) => (
-                <div
-                  key={reply.id}
-                  className="flex gap-4 rounded-lg border p-4"
-                >
+                <div key={reply.id} className="flex gap-4 rounded-lg border p-4">
                   <span className="text-2xl font-bold text-muted-foreground/30 leading-none w-6 shrink-0">
                     {i + 1}
                   </span>
@@ -286,10 +241,10 @@ export default async function AnalyticsPage() {
                         <span>{fmt(reply.likes)}</span>
                         <span className="text-xs font-normal text-muted-foreground/60">likes</span>
                       </span>
-                      <span className="flex items-center gap-1.5 text-green-500">
-                        <Repeat2 className="h-3.5 w-3.5" />
-                        <span>{fmt(reply.retweets)}</span>
-                        <span className="text-xs font-normal text-muted-foreground/60">retweets</span>
+                      <span className="flex items-center gap-1.5 text-blue-500">
+                        <MessageCircle className="h-3.5 w-3.5" />
+                        <span>{fmt(reply.repliesCount)}</span>
+                        <span className="text-xs font-normal text-muted-foreground/60">replies</span>
                       </span>
                     </div>
                   </div>
