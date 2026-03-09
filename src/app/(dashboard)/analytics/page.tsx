@@ -13,7 +13,6 @@ import {
   MessageCircle,
   Eye,
   Bot,
-  BookMarked,
   Users,
 } from "lucide-react";
 import { EngagementChart } from "@/components/analytics/engagement-chart";
@@ -134,11 +133,29 @@ export default async function AnalyticsPage() {
         likes: e.likes ?? 0,
         retweets: e.retweets ?? 0,
         repliesCount: e.replies ?? 0,
+        impressions: e.impressions ?? 0,
         total: (e.likes ?? 0) + (e.retweets ?? 0) + (e.replies ?? 0),
       };
     })
     .filter((p) => p.total > 0)
     .sort((a, b) => b.total - a.total)
+    .slice(0, 5);
+
+  // ── Top replies by views then likes ──────────────────────────
+  const topReplies = posts
+    .filter((p) => p.postType === "reply")
+    .map((p) => {
+      const e = parseEngagement(p.engagement);
+      return {
+        ...p,
+        likes: e.likes ?? 0,
+        retweets: e.retweets ?? 0,
+        repliesCount: e.replies ?? 0,
+        impressions: e.impressions ?? 0,
+      };
+    })
+    .filter((p) => p.impressions > 0 || p.likes > 0)
+    .sort((a, b) => b.impressions - a.impressions || b.likes - a.likes)
     .slice(0, 5);
 
   const memberSinceLabel = connection?.connectedAt
@@ -230,6 +247,58 @@ export default async function AnalyticsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ── Best performing replies ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">🏆 Best Performing Replies</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {topReplies.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No reply engagement data yet — metrics are polled every 48h after posting.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {topReplies.map((reply, i) => (
+                <div
+                  key={reply.id}
+                  className="flex gap-4 rounded-lg border p-4"
+                >
+                  <span className="text-2xl font-bold text-muted-foreground/30 leading-none w-6 shrink-0">
+                    {i + 1}
+                  </span>
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <p className="text-sm leading-snug line-clamp-3">{reply.content}</p>
+                    {reply.targetAuthor && (
+                      <p className="text-xs text-muted-foreground">
+                        → replied to <span className="font-medium">@{reply.targetAuthor}</span>
+                      </p>
+                    )}
+                    <div className="flex items-center gap-4 text-sm font-medium">
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <Eye className="h-3.5 w-3.5" />
+                        <span>{fmt(reply.impressions)}</span>
+                        <span className="text-xs font-normal text-muted-foreground/60">views</span>
+                      </span>
+                      <span className="flex items-center gap-1.5 text-rose-500">
+                        <Heart className="h-3.5 w-3.5" />
+                        <span>{fmt(reply.likes)}</span>
+                        <span className="text-xs font-normal text-muted-foreground/60">likes</span>
+                      </span>
+                      <span className="flex items-center gap-1.5 text-green-500">
+                        <Repeat2 className="h-3.5 w-3.5" />
+                        <span>{fmt(reply.retweets)}</span>
+                        <span className="text-xs font-normal text-muted-foreground/60">retweets</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
