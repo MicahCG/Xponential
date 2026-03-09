@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { createMovie, getMovieStatus, getMovieUrl, triggerWatermarkedVideo } from "@/lib/video/popcorn";
 import { generateContent } from "@/lib/content/generator";
 import { startTweetViaApify, checkApifyRun } from "@/lib/platform/apify-poster";
+import { startVideoUpload, checkVideoUpload, postTweetDirect } from "@/lib/platform/twitter-direct";
 
 export interface VideoProcessResult {
   kicked: number;
@@ -217,27 +218,24 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
         try {
           const tweetText = (log.replyContent || "").slice(0, 280) || ".";
 
-          // Start the Apify run ASYNC — don't block waiting.
-          // watermarkedVideoUrl is a direct MP4 that Twitter can ingest natively.
-          const { runId } = await startTweetViaApify(
-            log.userId,
-            tweetText,
-            log.targetTweetId,
-            videoUrl  // MP4 from watermarked video
-          );
+          // Upload the watermarked MP4 directly to Twitter via cookie auth.
+          // Apify's actor doesn't support video upload — we handle it natively.
+          // Store mediaId with "media:" prefix in apifyRunId field.
+          // Phase 3 will poll Twitter STATUS and post once processing completes.
+          const { mediaId } = await startVideoUpload(log.userId, videoUrl);
 
           await prisma.autoReplyLog.update({
             where: { id: log.id },
             data: {
               videoUrl,
-              apifyRunId: runId,
+              apifyRunId: `media:${mediaId}`,
               status: "posting_video",
             },
           });
 
           result.posting++;
           console.log(
-            `[VideoProcessor] Video post started for log ${log.id}: apifyRunId=${runId}`
+            `[VideoProcessor] Video upload started for log ${log.id}: mediaId=${mediaId}`
           );
         } catch (postErr) {
           const msg =
@@ -246,7 +244,7 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
             where: { id: log.id },
             data: { videoUrl, status: "failed", errorMessage: msg },
           });
-          result.errors.push(`Log ${log.id} (start post): ${msg}`);
+          result.errors.push(`Log ${log.id} (upload): ${msg}`);
           result.failed++;
         }
       } else {
@@ -305,28 +303,58 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
         continue;
       }
 
-      const check = await checkApifyRun(log.apifyRunId!);
+      let tweetId: string;
 
-      if (check.status === "running") {
-        result.stillProcessing++;
-        console.log(`[VideoProcessor] Log ${log.id} still posting via Apify (runId=${log.apifyRunId})`);
-        continue;
+      if (log.apifyRunId!.startsWith("media:")) {
+        // Twitter direct upload — check processing status then post tweet
+        const mediaId = log.apifyRunId!.replace("media:", "");
+        const check = await checkVideoUpload(log.userId, mediaId);
+
+        if (check.state === "processing") {
+          result.stillProcessing++;
+          console.log(`[VideoProcessor] Log ${log.id} video still processing on Twitter (mediaId=${mediaId})`);
+          continue;
+        }
+
+        if (check.state === "failed") {
+          const msg = check.error ?? "Twitter video processing failed";
+          await prisma.autoReplyLog.update({
+            where: { id: log.id },
+            data: { status: "failed", errorMessage: msg },
+          });
+          result.errors.push(`Log ${log.id} (media): ${msg}`);
+          result.failed++;
+          continue;
+        }
+
+        // Processing succeeded — post the tweet
+        const tweetText = (log.replyContent || "").slice(0, 280) || ".";
+        const posted = await postTweetDirect(log.userId, tweetText, mediaId, log.targetTweetId);
+        tweetId = posted.id;
+
+      } else {
+        // Legacy Apify run — check run status
+        const check = await checkApifyRun(log.apifyRunId!);
+
+        if (check.status === "running") {
+          result.stillProcessing++;
+          console.log(`[VideoProcessor] Log ${log.id} still posting via Apify`);
+          continue;
+        }
+
+        if (check.status === "failed") {
+          const msg = check.errorMessage ?? "Apify run failed";
+          await prisma.autoReplyLog.update({
+            where: { id: log.id },
+            data: { status: "failed", errorMessage: msg },
+          });
+          result.errors.push(`Log ${log.id} (apify): ${msg}`);
+          result.failed++;
+          continue;
+        }
+
+        tweetId = check.tweetId!;
       }
-
-      if (check.status === "failed") {
-        const msg = check.errorMessage ?? "Apify run failed";
-        await prisma.autoReplyLog.update({
-          where: { id: log.id },
-          data: { status: "failed", errorMessage: msg },
-        });
-        result.errors.push(`Log ${log.id} (apify): ${msg}`);
-        result.failed++;
-        console.error(`[VideoProcessor] Apify run failed for log ${log.id}: ${msg}`);
-        continue;
-      }
-
-      // Succeeded — record the posted tweet
-      const tweetId = check.tweetId!;
       await prisma.autoReplyLog.update({
         where: { id: log.id },
         data: {

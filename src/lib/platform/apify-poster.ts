@@ -94,8 +94,11 @@ export async function startTweetViaApify(
     mediaUrl ? `[video: ${mediaUrl.slice(0, 60)}...]` : ""
   );
 
-  // Start async — no waitForFinish, returns immediately with run ID
-  const runUrl = `${APIFY_API_BASE}/acts/${APIFY_ACTOR_ID}/runs?token=${token}`;
+  // Start async — no waitForFinish, returns immediately with run ID.
+  // For video runs, set timeout=300 (5min) so Twitter's transcoding has time to complete.
+  // Default actor timeout is 120s which is not enough for video upload + processing.
+  const timeout = mediaUrl ? 300 : 120;
+  const runUrl = `${APIFY_API_BASE}/acts/${APIFY_ACTOR_ID}/runs?token=${token}&timeout=${timeout}`;
   const runResponse = await fetch(runUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
