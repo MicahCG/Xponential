@@ -141,8 +141,20 @@ export async function checkVideoUpload(
   return { state: "processing" };
 }
 
+async function getOAuthAccessToken(userId: string): Promise<string> {
+  const conn = await prisma.platformConnection.findUnique({
+    where: { userId_platform: { userId, platform: "x" } },
+  });
+  if (!conn?.accessToken) {
+    throw new Error("No OAuth access token found for X — reconnect your account.");
+  }
+  return conn.accessToken;
+}
+
 /**
- * Posts a tweet with an already-uploaded media_id using cookie auth.
+ * Posts a tweet with an already-uploaded media_id using the stored
+ * OAuth 2.0 user access token (tweet.write scope).
+ * Media upload uses cookie auth; tweet posting uses OAuth to avoid blocks.
  */
 export async function postTweetDirect(
   userId: string,
@@ -150,8 +162,7 @@ export async function postTweetDirect(
   mediaId: string,
   replyToId?: string
 ): Promise<{ id: string }> {
-  const cookie = await getTwitterCookie(userId);
-  const headers = authHeaders(cookie);
+  const accessToken = await getOAuthAccessToken(userId);
 
   const body: Record<string, unknown> = {
     text,
@@ -161,11 +172,14 @@ export async function postTweetDirect(
     body.reply = { in_reply_to_tweet_id: replyToId };
   }
 
-  console.log(`[TwitterDirect] Posting tweet with mediaId=${mediaId}`, replyToId ? `(reply to ${replyToId})` : "");
+  console.log(`[TwitterDirect] Posting tweet (OAuth) with mediaId=${mediaId}`, replyToId ? `(reply to ${replyToId})` : "");
 
   const res = await fetch("https://api.twitter.com/2/tweets", {
     method: "POST",
-    headers: { ...headers, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(body),
   });
   const data = await res.json();

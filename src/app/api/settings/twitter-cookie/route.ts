@@ -48,6 +48,17 @@ export async function PUT(request: NextRequest) {
     );
   }
 
+  // Must be the full Header String format — needs both auth_token and ct0
+  if (!cookie.includes("ct0=")) {
+    return NextResponse.json(
+      {
+        error:
+          'Cookie is missing the ct0 token. Make sure you export as "Header String" from Cookie-Editor, not just the auth_token value.',
+      },
+      { status: 400 }
+    );
+  }
+
   // Find the user's X platform connection
   const connection = await prisma.platformConnection.findUnique({
     where: {
