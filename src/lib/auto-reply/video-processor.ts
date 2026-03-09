@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { createMovie, getMovieStatus, getMovieUrl, triggerWatermarkedVideo } from "@/lib/video/popcorn";
 import { generateContent } from "@/lib/content/generator";
 import { startTweetViaApify, checkApifyRun } from "@/lib/platform/apify-poster";
+import { compressAndUploadVideo } from "@/lib/video/compress";
 
 export interface VideoProcessResult {
   kicked: number;
@@ -217,13 +218,17 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
         try {
           const tweetText = (log.replyContent || "").slice(0, 280) || ".";
 
+          // Compress the MP4 to under 5MB so Apify's actor can upload it.
+          // Apify silently drops video files above 5MB (chunked INIT fails).
+          const filename = `${log.id}-${Date.now()}.mp4`;
+          const compressedUrl = await compressAndUploadVideo(videoUrl, filename);
+
           // Start the Apify run ASYNC — don't block waiting.
-          // watermarkedVideoUrl is a direct MP4 that Twitter can ingest natively.
           const { runId } = await startTweetViaApify(
             log.userId,
             tweetText,
             log.targetTweetId,
-            videoUrl  // MP4 from watermarked video
+            compressedUrl
           );
 
           await prisma.autoReplyLog.update({
