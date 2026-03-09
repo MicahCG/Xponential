@@ -67,7 +67,7 @@ export function FollowerChart({ data }: { data: FollowerDataPoint[] }) {
                   borderRadius: "8px",
                   fontSize: "12px",
                 }}
-                formatter={(v: number) => [v.toLocaleString(), "Followers"]}
+                formatter={(v) => [Number(v).toLocaleString(), "Followers"]}
               />
               <Line
                 dataKey="followers"
