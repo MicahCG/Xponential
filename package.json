@@ -10,8 +10,6 @@
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
-    "@ffmpeg/ffmpeg": "^0.12.15",
-    "@ffmpeg/util": "^0.12.2",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^6.19.2",
     "apify-client": "^2.22.2",
