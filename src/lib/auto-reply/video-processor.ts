@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { createMovie, getMovieStatus, getMovieUrl } from "@/lib/video/popcorn";
+import { createMovie, getMovieStatus, getMovieUrl, getDirectTsUrl } from "@/lib/video/popcorn";
 import { generateContent } from "@/lib/content/generator";
 import { startTweetViaApify, checkApifyRun } from "@/lib/platform/apify-poster";
 
@@ -192,18 +192,24 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
       // Video is ready — fetch final URL
       const movieUrl = await getMovieUrl(log.movieRootId!);
       const videoUrl = movieUrl.videoUrl ?? movieUrl.watermarkedVideoUrl;
-      // Popcorn returns HLS (.m3u8), not MP4. Use thumbnail as image media
-      // so the tweet has a visual frame. Native video requires MP4.
       const thumbnailUrl = movieUrl.thumbnailUrl ?? undefined;
 
       if (!videoUrl) {
         throw new Error("Video marked as ready but no URL returned");
       }
 
-      result.ready++;
+      // Popcorn returns HLS (.m3u8). Parse the manifest to get the direct .ts
+      // video file URL — H.264, ~4MB, publicly accessible, which Apify can
+      // download and pass to Twitter's media upload API.
+      const directVideoUrl = await getDirectTsUrl(videoUrl);
       console.log(
-        `[VideoProcessor] Video ready for log ${log.id}: videoUrl=${videoUrl} thumbnailUrl=${thumbnailUrl}`
+        `[VideoProcessor] Video ready for log ${log.id}: directUrl=${directVideoUrl ?? "none (falling back to thumbnail)"}`
       );
+
+      // Media to attach: prefer direct .ts video file, fall back to thumbnail image
+      const mediaUrl = directVideoUrl ?? thumbnailUrl;
+
+      result.ready++;
 
       // Post or save for approval based on reply mode
       const replyMode = log.watchedAccount.replyMode;
@@ -213,13 +219,12 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
           const tweetText = (log.replyContent || "").slice(0, 280) || ".";
 
           // Start the Apify run ASYNC — don't block waiting.
-          // Pass thumbnailUrl as image media (thumbnail is a direct public PNG).
-          // The HLS videoUrl (.m3u8) can't be uploaded to Twitter natively.
+          // Pass the direct .ts video URL so Apify uploads native video to Twitter.
           const { runId } = await startTweetViaApify(
             log.userId,
             tweetText,
             log.targetTweetId,
-            thumbnailUrl  // image preview of the video
+            mediaUrl
           );
 
           await prisma.autoReplyLog.update({

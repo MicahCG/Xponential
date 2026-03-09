@@ -66,6 +66,44 @@ export interface MovieUrl {
   title?: string;
 }
 
+// ─── Helpers ────────────────────────────────────────────────
+
+/**
+ * Given a Popcorn HLS manifest URL (.m3u8), fetches the manifest and
+ * returns the direct URL to the highest-quality .ts video file.
+ * The .ts file is a single publicly-accessible H.264 video that Apify
+ * can download and pass to Twitter's media upload API.
+ */
+export async function getDirectTsUrl(manifestUrl: string): Promise<string | null> {
+  try {
+    const baseDir = manifestUrl.substring(0, manifestUrl.lastIndexOf("/"));
+
+    // Fetch master manifest — lists quality variants
+    const masterRes = await fetch(manifestUrl);
+    if (!masterRes.ok) return null;
+    const master = await masterRes.text();
+
+    // Find first sub-manifest line (e.g. "576p-ts.m3u8")
+    const lines = master.split("\n").map((l) => l.trim()).filter(Boolean);
+    const subManifestName = lines.find((l) => l.endsWith(".m3u8") && !l.startsWith("#"));
+    if (!subManifestName) return null;
+
+    // Fetch sub-manifest — lists the actual .ts file(s)
+    const subRes = await fetch(`${baseDir}/${subManifestName}`);
+    if (!subRes.ok) return null;
+    const sub = await subRes.text();
+
+    // Find the .ts filename (e.g. "576p-ts0000000000.ts")
+    const subLines = sub.split("\n").map((l) => l.trim()).filter(Boolean);
+    const tsName = subLines.find((l) => l.endsWith(".ts") && !l.startsWith("#"));
+    if (!tsName) return null;
+
+    return `${baseDir}/${tsName}`;
+  } catch {
+    return null;
+  }
+}
+
 // ─── API Functions ──────────────────────────────────────────
 
 /**
