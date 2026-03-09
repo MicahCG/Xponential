@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { createMovie, getMovieStatus, getMovieUrl, triggerWatermarkedVideo } from "@/lib/video/popcorn";
 import { generateContent } from "@/lib/content/generator";
 import { startTweetViaApify, checkApifyRun } from "@/lib/platform/apify-poster";
+import { compressVideo } from "@/lib/video/compress";
 
 export interface VideoProcessResult {
   kicked: number;
@@ -218,13 +219,16 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
         try {
           const tweetText = (log.replyContent || "").slice(0, 280) || ".";
 
+          // Compress via Cloudinary to ensure file is under 5MB.
+          // Apify silently drops video above 5MB; at 500kbps a 15s clip is ~937KB.
+          const compressedUrl = await compressVideo(videoUrl);
+
           // Start the Apify run ASYNC — don't block waiting.
-          // Budget quality from Popcorn should keep the MP4 under 5MB.
           const { runId } = await startTweetViaApify(
             log.userId,
             tweetText,
             log.targetTweetId,
-            videoUrl
+            compressedUrl
           );
 
           await prisma.autoReplyLog.update({
