@@ -14,6 +14,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Clapperboard,
+  BarChart2,
 } from "lucide-react";
 
 const navItems = [
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/personality", label: "Personality", icon: Brain },
   { href: "/content", label: "Auto-Replies", icon: MessageSquareReply },
   { href: "/video", label: "Video Studio", icon: Clapperboard },
+  { href: "/analytics", label: "Analytics", icon: BarChart2 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
