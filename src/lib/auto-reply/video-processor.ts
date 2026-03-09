@@ -192,6 +192,9 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
       // Video is ready — fetch final URL
       const movieUrl = await getMovieUrl(log.movieRootId!);
       const videoUrl = movieUrl.videoUrl ?? movieUrl.watermarkedVideoUrl;
+      // Popcorn returns HLS (.m3u8), not MP4. Use thumbnail as image media
+      // so the tweet has a visual frame. Native video requires MP4.
+      const thumbnailUrl = movieUrl.thumbnailUrl ?? undefined;
 
       if (!videoUrl) {
         throw new Error("Video marked as ready but no URL returned");
@@ -199,7 +202,7 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
 
       result.ready++;
       console.log(
-        `[VideoProcessor] Video ready for log ${log.id}: ${videoUrl}`
+        `[VideoProcessor] Video ready for log ${log.id}: videoUrl=${videoUrl} thumbnailUrl=${thumbnailUrl}`
       );
 
       // Post or save for approval based on reply mode
@@ -207,19 +210,16 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
 
       if (replyMode === "auto") {
         try {
-          // Popcorn returns HLS manifests (.m3u8), not direct MP4 files.
-          // Twitter's media upload API only accepts MP4, so we can't pass the
-          // video URL to Apify as media. Post as a text reply instead.
-          // TODO: Once Popcorn exposes an MP4 URL field, use it for native video.
           const tweetText = (log.replyContent || "").slice(0, 280) || ".";
 
           // Start the Apify run ASYNC — don't block waiting.
-          // The run ID is stored and checked in Phase 3 next cron cycle.
+          // Pass thumbnailUrl as image media (thumbnail is a direct public PNG).
+          // The HLS videoUrl (.m3u8) can't be uploaded to Twitter natively.
           const { runId } = await startTweetViaApify(
             log.userId,
             tweetText,
-            log.targetTweetId
-            // No mediaUrl — HLS streams can't be uploaded to Twitter
+            log.targetTweetId,
+            thumbnailUrl  // image preview of the video
           );
 
           await prisma.autoReplyLog.update({
