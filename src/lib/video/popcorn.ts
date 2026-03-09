@@ -179,6 +179,37 @@ export async function getMovieStatus(
 }
 
 /**
+ * Triggers watermarked MP4 generation for a completed movie.
+ * Must be called after the movie status is "ready".
+ * The watermarkedVideoUrl in subsequent getMovieUrl calls will be populated once done.
+ */
+export async function triggerWatermarkedVideo(
+  movieRootId: string
+): Promise<{ watermarkedVideoUrl?: string }> {
+  const { apiUrl, apiKey } = getConfig();
+
+  const res = await fetch(`${apiUrl}/api/mcp/triggerWatermarkedVideo`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+    },
+    body: JSON.stringify({ movieRootId }),
+  });
+
+  if (!res.ok && res.status !== 202) {
+    const errText = await res.text();
+    throw new Error(
+      `Popcorn triggerWatermarkedVideo failed (HTTP ${res.status}): ${errText}`
+    );
+  }
+
+  const data = await res.json();
+  console.log("[Popcorn] triggerWatermarkedVideo response:", JSON.stringify(data));
+  return data as { watermarkedVideoUrl?: string };
+}
+
+/**
  * Get the final video URL for a completed movie.
  */
 export async function getMovieUrl(movieRootId: string): Promise<MovieUrl> {

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { createMovie, getMovieStatus, getMovieUrl, getDirectTsUrl } from "@/lib/video/popcorn";
+import { createMovie, getMovieStatus, getMovieUrl, triggerWatermarkedVideo } from "@/lib/video/popcorn";
 import { generateContent } from "@/lib/content/generator";
 import { startTweetViaApify, checkApifyRun } from "@/lib/platform/apify-poster";
 
@@ -189,25 +189,24 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
         continue;
       }
 
-      // Video is ready — fetch final URL
+      // Video is ready — check for watermarked MP4 URL (direct file for Twitter upload)
       const movieUrl = await getMovieUrl(log.movieRootId!);
-      const videoUrl = movieUrl.videoUrl ?? movieUrl.watermarkedVideoUrl;
       const thumbnailUrl = movieUrl.thumbnailUrl ?? undefined;
 
-      if (!videoUrl) {
-        throw new Error("Video marked as ready but no URL returned");
+      if (!movieUrl.watermarkedVideoUrl) {
+        // Watermarked MP4 not ready yet — trigger generation and wait for next cycle
+        await triggerWatermarkedVideo(log.movieRootId!);
+        console.log(
+          `[VideoProcessor] Log ${log.id}: triggered watermarked video, waiting for next cycle`
+        );
+        result.stillProcessing++;
+        continue;
       }
 
-      // Popcorn returns HLS (.m3u8). Parse the manifest to get the direct .ts
-      // video file URL — H.264, ~4MB, publicly accessible, which Apify can
-      // download and pass to Twitter's media upload API.
-      const directVideoUrl = await getDirectTsUrl(videoUrl);
+      const videoUrl = movieUrl.watermarkedVideoUrl;
       console.log(
-        `[VideoProcessor] Video ready for log ${log.id}: directUrl=${directVideoUrl ?? "none (falling back to thumbnail)"}`
+        `[VideoProcessor] Video ready for log ${log.id}: watermarkedUrl=${videoUrl}`
       );
-
-      // Media to attach: prefer direct .ts video file, fall back to thumbnail image
-      const mediaUrl = directVideoUrl ?? thumbnailUrl;
 
       result.ready++;
 
@@ -219,12 +218,12 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
           const tweetText = (log.replyContent || "").slice(0, 280) || ".";
 
           // Start the Apify run ASYNC — don't block waiting.
-          // Pass the direct .ts video URL so Apify uploads native video to Twitter.
+          // watermarkedVideoUrl is a direct MP4 that Twitter can ingest natively.
           const { runId } = await startTweetViaApify(
             log.userId,
             tweetText,
             log.targetTweetId,
-            mediaUrl
+            videoUrl  // MP4 from watermarked video
           );
 
           await prisma.autoReplyLog.update({
