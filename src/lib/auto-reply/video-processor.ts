@@ -117,6 +117,7 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
         duration: "15",
         orientation: "vertical",
         quality: "budget",
+        style: "muppet",
         userId: popcornUserId,
       });
 
