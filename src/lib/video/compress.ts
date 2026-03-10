@@ -1,9 +1,11 @@
 /**
- * Compresses a video by uploading it to Cloudinary with a bitrate cap.
- * Returns a public URL of the compressed file.
+ * Uploads a video to Cloudinary and returns a transformation URL
+ * that compresses it to ~500kbps on the fly.
  *
- * Target: under 5MB so Apify's actor can upload it to Twitter.
- * At 500kbps a 15s video is ~937KB — well within the limit.
+ * Cloudinary applies the transformation when the URL is first fetched
+ * and caches the result. No eager processing required.
+ *
+ * At 500kbps a 21s clip is ~1.3MB — well under Apify's 5MB limit.
  */
 import { v2 as cloudinary } from "cloudinary";
 
@@ -18,15 +20,20 @@ export async function compressVideo(sourceUrl: string): Promise<string> {
 
   const result = await cloudinary.uploader.upload(sourceUrl, {
     resource_type: "video",
-    eager: [{ bit_rate: "500k", quality: "auto:low" }],
-    eager_async: false,
   });
 
-  const compressed = result.eager?.[0]?.secure_url;
-  if (!compressed) {
-    throw new Error("Cloudinary did not return a compressed video URL");
-  }
+  console.log(`[Compress] Original uploaded: ${(result.bytes / 1024 / 1024).toFixed(2)} MB (${result.public_id})`);
 
-  console.log(`[Compress] Done: ${compressed}`);
-  return compressed;
+  // Build a URL with compression transformation baked in.
+  // br_500k caps bitrate to 500kbps; q_auto:low reduces quality further.
+  // Cloudinary transforms and serves compressed video when this URL is fetched.
+  const compressedUrl = cloudinary.url(result.public_id, {
+    resource_type: "video",
+    transformation: [{ bit_rate: "500k", quality: "auto:low" }],
+    format: "mp4",
+    secure: true,
+  });
+
+  console.log(`[Compress] Compressed URL: ${compressedUrl}`);
+  return compressedUrl;
 }
