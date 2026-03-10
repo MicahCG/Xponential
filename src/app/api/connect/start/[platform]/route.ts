@@ -46,8 +46,15 @@ export async function GET(
   }
 
   if (platform === "linkedin") {
-    const clientId = process.env.LINKEDIN_CLIENT_ID!;
-    const redirectUri = process.env.LINKEDIN_CALLBACK_URL!;
+    const clientId = process.env.LINKEDIN_CLIENT_ID;
+    const redirectUri = process.env.LINKEDIN_CALLBACK_URL;
+
+    if (!clientId || !redirectUri) {
+      return NextResponse.redirect(
+        new URL("/connections?error=linkedin_not_configured", request.url)
+      );
+    }
+
     const state = linkedinOAuth.generateState();
 
     await prisma.oAuthState.create({
