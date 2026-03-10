@@ -27,9 +27,11 @@ export async function compressVideo(sourceUrl: string): Promise<string> {
   // Build a URL with compression transformation baked in.
   // br_500k caps bitrate to 500kbps; q_auto:low reduces quality further.
   // Cloudinary transforms and serves compressed video when this URL is fetched.
+  // Compress aggressively: cap bitrate, auto quality, downscale to 720p width.
+  // 1080x1920 → 720x1280 at 500kbps = ~1.3MB for a 21s clip.
   const compressedUrl = cloudinary.url(result.public_id, {
     resource_type: "video",
-    transformation: [{ bit_rate: "500k", quality: "auto:low" }],
+    transformation: [{ bit_rate: "500k", quality: "auto:low", width: 720, crop: "scale" }],
     format: "mp4",
     secure: true,
   });
