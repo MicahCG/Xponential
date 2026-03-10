@@ -36,12 +36,12 @@ interface AutoReplyLog {
   errorMessage: string | null;
   createdAt: string;
   postedAt: string | null;
-  watchedAccount: { accountHandle: string };
+  watchedAccount: { accountHandle: string; platform: string };
 }
 
 // ─── Reply Feed (fetches + renders the full list) ───────────
 
-export function ReplyFeed() {
+export function ReplyFeed({ platform }: { platform?: "x" | "linkedin" } = {}) {
   const [replies, setReplies] = useState<AutoReplyLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [approveError, setApproveError] = useState<string | null>(null);
@@ -51,7 +51,12 @@ export function ReplyFeed() {
       const res = await fetch("/api/auto-replies");
       if (res.ok) {
         const data = await res.json();
-        setReplies(data.replies);
+        const all: AutoReplyLog[] = data.replies;
+        setReplies(
+          platform
+            ? all.filter((r) => r.watchedAccount.platform === platform)
+            : all
+        );
       }
     } catch {
       // Silently fail

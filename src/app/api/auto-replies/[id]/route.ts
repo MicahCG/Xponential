@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { postTweetWithRetry, XPostError } from "@/lib/platform/x-client";
+import { postLinkedInComment } from "@/lib/platform/linkedin-client";
 
 export async function PUT(
   request: NextRequest,
@@ -55,40 +56,70 @@ export async function PUT(
 
   // Approve: post the reply (use edited content if provided)
   const contentToPost = editedContent?.trim() || replyLog.replyContent;
+
+  // Determine platform from the watched account
+  const watchedAccount = await prisma.watchedAccount.findUnique({
+    where: { id: replyLog.watchedAccountId },
+    select: { platform: true },
+  });
+  const platform = watchedAccount?.platform ?? "x";
+
   try {
-    const result = await postTweetWithRetry(
-      session.user.id,
-      contentToPost,
-      replyLog.targetTweetId,
-      replyLog.videoUrl ?? undefined
-    );
+    let postedId: string;
+
+    if (platform === "linkedin") {
+      const connection = await prisma.platformConnection.findUnique({
+        where: { userId_platform: { userId: session.user.id, platform: "linkedin" } },
+      });
+      if (!connection || connection.status !== "active") {
+        return NextResponse.json(
+          { error: "LinkedIn account not connected", source: "linkedin", errorType: "auth", retryable: true },
+          { status: 401 }
+        );
+      }
+      const authorUrn = `urn:li:person:${connection.accountId}`;
+      const result = await postLinkedInComment(
+        connection.accessToken,
+        authorUrn,
+        replyLog.targetTweetId,
+        contentToPost
+      );
+      postedId = result.id;
+    } else {
+      const result = await postTweetWithRetry(
+        session.user.id,
+        contentToPost,
+        replyLog.targetTweetId,
+        replyLog.videoUrl ?? undefined
+      );
+      postedId = result.id;
+    }
 
     await prisma.autoReplyLog.update({
       where: { id },
       data: {
         status: "posted",
         replyContent: contentToPost,
-        replyTweetId: result.id,
+        replyTweetId: postedId,
         postedAt: new Date(),
       },
     });
 
-    // Also record in post history
     await prisma.postHistory.create({
       data: {
         userId: session.user.id,
-        platform: "x",
+        platform,
         postType: "reply",
         content: contentToPost,
         targetPostId: replyLog.targetTweetId,
         targetAuthor: replyLog.targetAuthor,
         videoUrl: replyLog.videoUrl,
         videoFormat: replyLog.videoUrl ? "mp4" : undefined,
-        platformPostId: result.id,
+        platformPostId: postedId,
       },
     });
 
-    return NextResponse.json({ success: true, status: "posted", tweetId: result.id });
+    return NextResponse.json({ success: true, status: "posted", tweetId: postedId });
   } catch (error) {
     console.error("Approve auto-reply error:", error);
 

@@ -23,6 +23,10 @@
     {
       "path": "/api/cron/poll-followers",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/linkedin-auto-reply",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

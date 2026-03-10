@@ -25,7 +25,7 @@ export async function GET() {
       errorMessage: true,
       createdAt: true,
       postedAt: true,
-      watchedAccount: { select: { accountHandle: true } },
+      watchedAccount: { select: { accountHandle: true, platform: true } },
     },
   });
 
