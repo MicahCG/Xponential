@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Loader2,
   Plus,
@@ -29,11 +30,17 @@ import {
   Sparkles,
   TrendingUp,
   Save,
+  Twitter,
+  Linkedin,
+  Send,
+  Clock,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnalyzeStep } from "@/components/setup/analyze-step";
 import { AccountsStep } from "@/components/setup/accounts-step";
 import { ReplyFeed } from "@/components/auto-replies/reply-feed";
+import { formatDistanceToNow } from "date-fns";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -50,6 +57,14 @@ interface WatchedAccount {
   category: string | null;
 }
 
+interface LinkedInPost {
+  id: string;
+  content: string;
+  postedAt: string;
+  platformPostId: string | null;
+  status: string;
+}
+
 const MAX_ENABLED = 12;
 
 // ─── Formatting ──────────────────────────────────────────────
@@ -61,12 +76,182 @@ function formatFollowers(n: number | null): string {
   return `${n} followers`;
 }
 
-// ─── Main Page ──────────────────────────────────────────────
+// ─── LinkedIn Tab ────────────────────────────────────────────
 
-export default function AutoReplyPage() {
+function LinkedInTab() {
+  const [postText, setPostText] = useState("");
+  const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
+  const [postSuccess, setPostSuccess] = useState(false);
+  const [history, setHistory] = useState<LinkedInPost[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [connected, setConnected] = useState<boolean | null>(null);
+
+  const fetchHistory = useCallback(async () => {
+    try {
+      const [historyRes, connectRes] = await Promise.all([
+        fetch("/api/content/history?platform=linkedin"),
+        fetch("/api/connect/list"),
+      ]);
+      if (historyRes.ok) {
+        const data = await historyRes.json();
+        setHistory(data.items ?? []);
+      }
+      if (connectRes.ok) {
+        const connections = await connectRes.json();
+        const li = connections.find(
+          (c: { platform: string; status: string }) =>
+            c.platform === "linkedin" && c.status === "active"
+        );
+        setConnected(!!li);
+      }
+    } catch {
+      // Silently fail
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
+
+  const handlePost = async () => {
+    if (!postText.trim()) return;
+    setPosting(true);
+    setPostError(null);
+    setPostSuccess(false);
+
+    try {
+      const postRes = await fetch("/api/linkedin/post", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: postText.trim() }),
+      });
+
+      const postData = await postRes.json();
+      if (!postRes.ok) {
+        setPostError(postData.error ?? "Failed to publish post");
+        return;
+      }
+
+      setPostSuccess(true);
+      setPostText("");
+      fetchHistory();
+      setTimeout(() => setPostSuccess(false), 3000);
+    } catch {
+      setPostError("Something went wrong. Please try again.");
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  if (connected === false) {
+    return (
+      <Card className="mx-auto max-w-md mt-8">
+        <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
+          <Linkedin className="h-10 w-10 text-muted-foreground" />
+          <div>
+            <p className="font-medium">LinkedIn not connected</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Connect your LinkedIn account to start posting.
+            </p>
+          </div>
+          <Button asChild>
+            <a href="/api/connect/start/linkedin">Connect LinkedIn</a>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Compose */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">New LinkedIn Post</CardTitle>
+          <CardDescription>
+            Write and publish a post to your LinkedIn profile
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Textarea
+            value={postText}
+            onChange={(e) => {
+              setPostText(e.target.value);
+              setPostError(null);
+            }}
+            placeholder="What do you want to share on LinkedIn?"
+            rows={5}
+            maxLength={3000}
+          />
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">
+              {postText.length}/3000
+            </span>
+            <div className="flex items-center gap-2">
+              {postError && (
+                <p className="text-sm text-destructive">{postError}</p>
+              )}
+              {postSuccess && (
+                <span className="flex items-center gap-1 text-sm text-green-600">
+                  <Check className="h-4 w-4" /> Posted!
+                </span>
+              )}
+              <Button
+                onClick={handlePost}
+                disabled={posting || !postText.trim()}
+              >
+                {posting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="mr-2 h-4 w-4" />
+                )}
+                Post to LinkedIn
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Post history */}
+      {loadingHistory ? (
+        <div className="flex justify-center py-6">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : history.length > 0 ? (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Post History</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {history.map((post) => (
+              <div key={post.id} className="rounded-lg border p-3 space-y-1">
+                <p className="text-sm whitespace-pre-wrap">{post.content}</p>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  {formatDistanceToNow(new Date(post.postedAt), {
+                    addSuffix: true,
+                  })}
+                  <Badge variant="outline" className="text-xs">
+                    LinkedIn
+                  </Badge>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
+  );
+}
+
+// ─── X Tab ───────────────────────────────────────────────────
+
+function XTab() {
   const [accounts, setAccounts] = useState<WatchedAccount[]>([]);
   const [loading, setLoading] = useState(true);
-  // null = loading, false = no profile, true = has profile
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
   const [onboardingStep, setOnboardingStep] = useState<"analyze" | "select" | null>(null);
   const [newHandle, setNewHandle] = useState("");
@@ -96,7 +281,6 @@ export default function AutoReplyPage() {
         const fetched: WatchedAccount[] = data.accounts ?? [];
         setAccounts(fetched);
 
-        // Load reply instructions from profile
         const profileOk = profileRes.ok;
         const profile = profileOk ? await profileRes.json() : null;
 
@@ -106,8 +290,6 @@ export default function AutoReplyPage() {
         }
 
         if (fetched.length === 0) {
-          // Always re-analyze when there are no watched accounts —
-          // this re-scrapes Twitter and regenerates recommendations
           setHasProfile(!!profile?.id);
           setOnboardingStep("analyze");
         } else {
@@ -115,9 +297,8 @@ export default function AutoReplyPage() {
           setHasProfile(true);
         }
       }
-
     } catch {
-      // Silently fail — page still renders with empty state
+      // Silently fail
     } finally {
       setLoading(false);
     }
@@ -127,7 +308,6 @@ export default function AutoReplyPage() {
     fetchData();
   }, [fetchData]);
 
-  // Called when AccountsStep completes — re-fetch to enter populated view
   const handleOnboardingComplete = useCallback(() => {
     setLoading(true);
     setOnboardingStep(null);
@@ -142,9 +322,7 @@ export default function AutoReplyPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ replyInstructions }),
       });
-      if (res.ok) {
-        setSavedInstructions(replyInstructions);
-      }
+      if (res.ok) setSavedInstructions(replyInstructions);
     } catch {
       // Silently fail
     } finally {
@@ -156,13 +334,11 @@ export default function AutoReplyPage() {
     setAccounts((prev) =>
       prev.map((a) => (a.id === id ? { ...a, isEnabled } : a))
     );
-
     const res = await fetch(`/api/watched-accounts/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isEnabled }),
     });
-
     if (!res.ok) {
       setAccounts((prev) =>
         prev.map((a) => (a.id === id ? { ...a, isEnabled: !isEnabled } : a))
@@ -170,13 +346,10 @@ export default function AutoReplyPage() {
       const data = await res.json().catch(() => ({}));
       setAddError(data.error ?? "Failed to update account");
     } else {
-      // After disabling all accounts, check if we should show onboarding
       const updated = accounts.map((a) =>
         a.id === id ? { ...a, isEnabled } : a
       );
-      if (updated.every((a) => !a.isEnabled)) {
-        setOnboardingStep("select");
-      }
+      if (updated.every((a) => !a.isEnabled)) setOnboardingStep("select");
     }
   };
 
@@ -206,7 +379,6 @@ export default function AutoReplyPage() {
     const next = accounts.filter((a) => a.id !== id);
     setAccounts(next);
     await fetch(`/api/watched-accounts/${id}`, { method: "DELETE" });
-
     if (next.length === 0) {
       setOnboardingStep(hasProfile ? "select" : "analyze");
     }
@@ -215,23 +387,19 @@ export default function AutoReplyPage() {
   const handleAdd = async () => {
     const handle = newHandle.replace("@", "").trim();
     if (!handle) return;
-
     setAdding(true);
     setAddError(null);
-
     try {
       const res = await fetch("/api/watched-accounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ handle }),
       });
-
       const data = await res.json();
       if (!res.ok) {
         setAddError(data.error ?? "Failed to add account");
         return;
       }
-
       setAccounts((prev) => [...prev, data.account]);
       setNewHandle("");
       setOnboardingStep(null);
@@ -250,48 +418,33 @@ export default function AutoReplyPage() {
     );
   }
 
-  // ─── Onboarding / Empty State ──────────────────────────────
-
   if (onboardingStep !== null) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Auto-Replies</h1>
-          <p className="text-muted-foreground">
-            Manage accounts your AI agent monitors and auto-replies to
-          </p>
-        </div>
-
-        <div className="py-4">
-          {onboardingStep === "analyze" && (
-            <AnalyzeStep onComplete={() => setOnboardingStep("select")} />
-          )}
-          {onboardingStep === "select" && (
-            <AccountsStep onComplete={handleOnboardingComplete} />
-          )}
-        </div>
+      <div className="space-y-6 py-4">
+        {onboardingStep === "analyze" && (
+          <AnalyzeStep onComplete={() => setOnboardingStep("select")} />
+        )}
+        {onboardingStep === "select" && (
+          <AccountsStep onComplete={handleOnboardingComplete} />
+        )}
       </div>
     );
   }
 
-  // ─── Populated State ───────────────────────────────────────
-
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Auto-Replies</h1>
-        <p className="text-muted-foreground">
-          Manage accounts your AI agent monitors and auto-replies to
-        </p>
-      </div>
-
-      {/* Add Account — inline at top */}
+      {/* Add Account */}
       <div className="flex gap-3 items-center">
         <div className="relative flex-1 max-w-sm">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">@</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+            @
+          </span>
           <Input
             value={newHandle}
-            onChange={(e) => { setNewHandle(e.target.value); setAddError(null); }}
+            onChange={(e) => {
+              setNewHandle(e.target.value);
+              setAddError(null);
+            }}
             placeholder="Add account by username"
             className="pl-8"
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
@@ -303,11 +456,15 @@ export default function AutoReplyPage() {
           disabled={adding || !newHandle.trim()}
           size="sm"
         >
-          {adding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+          {adding ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Plus className="mr-2 h-4 w-4" />
+          )}
           Add
         </Button>
         <span className="text-xs text-muted-foreground whitespace-nowrap">
-          {enabledCount}/{MAX_ENABLED} active slots · {accounts.length} total
+          {enabledCount}/{MAX_ENABLED} active · {accounts.length} total
         </span>
         {addError && <p className="text-sm text-destructive">{addError}</p>}
       </div>
@@ -318,14 +475,13 @@ export default function AutoReplyPage() {
           <CardTitle className="text-lg">Reply Instructions</CardTitle>
           <CardDescription>
             Tell your AI agent how to adjust its personality when replying.
-            These instructions override the default personality profile.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <Textarea
             value={replyInstructions}
             onChange={(e) => setReplyInstructions(e.target.value)}
-            placeholder="e.g. Be more sarcastic, reference crypto culture, keep replies under 2 sentences, don't use emojis..."
+            placeholder="e.g. Be more sarcastic, keep replies under 2 sentences, don't use emojis..."
             rows={3}
             maxLength={1000}
           />
@@ -335,7 +491,10 @@ export default function AutoReplyPage() {
             </span>
             <Button
               onClick={handleSaveInstructions}
-              disabled={savingInstructions || replyInstructions === savedInstructions}
+              disabled={
+                savingInstructions ||
+                replyInstructions === savedInstructions
+              }
               size="sm"
             >
               {savingInstructions ? (
@@ -349,7 +508,7 @@ export default function AutoReplyPage() {
         </CardContent>
       </Card>
 
-      {/* Active accounts — sorted */}
+      {/* Active accounts */}
       {activeAccounts.length > 0 && (
         <Card>
           <CardHeader>
@@ -363,7 +522,7 @@ export default function AutoReplyPage() {
               </Badge>
             </div>
             <CardDescription>
-              Your agent is monitoring these accounts and replying when they post.
+              Your agent monitors these accounts and replies when they post.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -374,7 +533,9 @@ export default function AutoReplyPage() {
                 canEnable={true}
                 onToggle={(enabled) => handleToggle(account.id, enabled)}
                 onModeChange={(mode) => handleModeChange(account.id, mode)}
-                onReplyTypeChange={(type) => handleReplyTypeChange(account.id, type)}
+                onReplyTypeChange={(type) =>
+                  handleReplyTypeChange(account.id, type)
+                }
                 onRemove={() => handleRemove(account.id)}
               />
             ))}
@@ -382,7 +543,7 @@ export default function AutoReplyPage() {
         </Card>
       )}
 
-      {/* Inactive accounts — unified sorted list */}
+      {/* Suggested accounts */}
       {inactiveAccounts.length > 0 && (
         <Card>
           <CardHeader>
@@ -402,7 +563,9 @@ export default function AutoReplyPage() {
                 canEnable={enabledCount < MAX_ENABLED}
                 onToggle={(enabled) => handleToggle(account.id, enabled)}
                 onModeChange={(mode) => handleModeChange(account.id, mode)}
-                onReplyTypeChange={(type) => handleReplyTypeChange(account.id, type)}
+                onReplyTypeChange={(type) =>
+                  handleReplyTypeChange(account.id, type)
+                }
                 onRemove={() => handleRemove(account.id)}
               />
             ))}
@@ -410,8 +573,43 @@ export default function AutoReplyPage() {
         </Card>
       )}
 
-      {/* Recent Auto-Replies — shared interactive component */}
+      {/* Recent replies feed */}
       <ReplyFeed />
+    </div>
+  );
+}
+
+// ─── Main Page ───────────────────────────────────────────────
+
+export default function AutoReplyPage() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Auto-Replies</h1>
+        <p className="text-muted-foreground">
+          Manage your AI agent across platforms
+        </p>
+      </div>
+
+      <Tabs defaultValue="x">
+        <TabsList>
+          <TabsTrigger value="x" className="gap-2">
+            <Twitter className="h-4 w-4" />X
+          </TabsTrigger>
+          <TabsTrigger value="linkedin" className="gap-2">
+            <Linkedin className="h-4 w-4" />
+            LinkedIn
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="x" className="mt-6">
+          <XTab />
+        </TabsContent>
+
+        <TabsContent value="linkedin" className="mt-6">
+          <LinkedInTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -445,7 +643,10 @@ function WatchedAccountCard({
               </Badge>
             )}
             {account.isRecommended && !account.isEnabled && (
-              <Badge variant="outline" className="gap-1 text-xs text-purple-600 border-purple-200 dark:text-purple-400 dark:border-purple-800">
+              <Badge
+                variant="outline"
+                className="gap-1 text-xs text-purple-600 border-purple-200 dark:text-purple-400 dark:border-purple-800"
+              >
                 <Sparkles className="h-2.5 w-2.5" />
                 AI Pick
               </Badge>
@@ -462,7 +663,6 @@ function WatchedAccountCard({
           </div>
         </div>
 
-        {/* Reply type selection */}
         <div className="flex items-center gap-1">
           <Badge
             variant={account.replyType === "text" ? "default" : "outline"}
@@ -485,7 +685,6 @@ function WatchedAccountCard({
           </Badge>
         </div>
 
-        {/* Mode selector */}
         <Select
           value={account.replyMode}
           onValueChange={onModeChange}
@@ -500,14 +699,12 @@ function WatchedAccountCard({
           </SelectContent>
         </Select>
 
-        {/* Toggle */}
         <Switch
           checked={account.isEnabled}
           onCheckedChange={onToggle}
           disabled={!canEnable && !account.isEnabled}
         />
 
-        {/* Remove */}
         <Button
           variant="ghost"
           size="icon"
@@ -520,4 +717,3 @@ function WatchedAccountCard({
     </Card>
   );
 }
-
