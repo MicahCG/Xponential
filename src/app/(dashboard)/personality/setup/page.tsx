@@ -71,22 +71,6 @@ export default function PersonalitySetupPage() {
           {method === "scrape" && <ScrapeForm onComplete={setResult} />}
           {method === "quiz" && <QuizForm onComplete={setResult} />}
           {method === "freetext" && <FreetextForm onComplete={setResult} />}
-          {method === "hybrid" && (
-            <div className="text-sm text-muted-foreground">
-              <p>
-                The hybrid method lets you combine scraping, quiz, and freetext
-                inputs for the most accurate profile. For Phase 1, please use one
-                of the individual methods. Hybrid support is coming soon.
-              </p>
-              <Button
-                variant="outline"
-                className="mt-4"
-                onClick={() => setMethod(null)}
-              >
-                Choose Another Method
-              </Button>
-            </div>
-          )}
         </div>
       )}
     </div>

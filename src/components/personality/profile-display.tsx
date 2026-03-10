@@ -75,13 +75,13 @@ export function ProfileDisplay({
           <p className="mt-1 text-sm">{profile.cultural_references}</p>
         </div>
 
-        {profile.sample_phrases.length > 0 && (
+        {(profile.sample_phrases?.length ?? 0) > 0 && (
           <div>
             <h4 className="mb-2 text-sm font-medium text-muted-foreground">
               Sample Phrases
             </h4>
             <div className="flex flex-wrap gap-2">
-              {profile.sample_phrases.map((phrase, i) => (
+              {(profile.sample_phrases ?? []).map((phrase, i) => (
                 <Badge key={i} variant="secondary">
                   &ldquo;{phrase}&rdquo;
                 </Badge>
@@ -90,13 +90,13 @@ export function ProfileDisplay({
           </div>
         )}
 
-        {profile.avoid_patterns.length > 0 && (
+        {(profile.avoid_patterns?.length ?? 0) > 0 && (
           <div>
             <h4 className="mb-2 text-sm font-medium text-muted-foreground">
               Avoid Patterns
             </h4>
             <div className="flex flex-wrap gap-2">
-              {profile.avoid_patterns.map((pattern, i) => (
+              {(profile.avoid_patterns ?? []).map((pattern, i) => (
                 <Badge key={i} variant="destructive" className="font-normal">
                   {pattern}
                 </Badge>

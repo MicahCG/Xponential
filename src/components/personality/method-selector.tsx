@@ -6,7 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Twitter, HelpCircle, FileText, Layers } from "lucide-react";
+import { Twitter, HelpCircle, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const methods = [
@@ -32,14 +32,6 @@ const methods = [
     description:
       "Write a free-form description of how you want the agent to sound.",
     icon: FileText,
-    recommended: false,
-  },
-  {
-    id: "hybrid" as const,
-    title: "Combine Methods",
-    description:
-      "Mix and match any of the above methods for the most accurate profile.",
-    icon: Layers,
     recommended: false,
   },
 ];

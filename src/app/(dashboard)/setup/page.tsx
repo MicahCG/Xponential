@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { Loader2, Check, Twitter, ArrowRight } from "lucide-react";
 import { AnalyzeStep } from "@/components/setup/analyze-step";
 import { AccountsStep } from "@/components/setup/accounts-step";
+import { CookieStep } from "@/components/setup/cookie-step";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ function Stepper({ currentStep }: { currentStep: number }) {
     { num: 1, label: "Connect X" },
     { num: 2, label: "Analyze Profile" },
     { num: 3, label: "Select Accounts" },
+    { num: 4, label: "Add Cookie" },
   ];
 
   return (
@@ -237,7 +239,7 @@ export default function SetupPage() {
           Set up Xponential
         </h1>
         <p className="text-muted-foreground">
-          Three quick steps to start auto-replying in your voice
+          Four quick steps to start auto-replying in your voice
         </p>
       </div>
 
@@ -262,6 +264,14 @@ export default function SetupPage() {
 
         {currentStep === 3 && (
           <AccountsStep
+            onComplete={() => {
+              setCurrentStep(4);
+            }}
+          />
+        )}
+
+        {currentStep === 4 && (
+          <CookieStep
             onComplete={() => {
               router.push("/dashboard");
             }}
