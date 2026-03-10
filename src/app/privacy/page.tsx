@@ -14,7 +14,7 @@ export default function PrivacyPolicyPage() {
           Xponential (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) operates a social media automation
           platform that helps users schedule and publish content on X (Twitter) and LinkedIn.
           This Privacy Policy explains how we collect, use, and protect your information when
-          you use our service at xponential.vercel.app.
+          you use our service at xponential-two.vercel.app.
         </p>
       </section>
 
