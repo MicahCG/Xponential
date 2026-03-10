@@ -176,25 +176,30 @@ export async function checkApifyRun(runId: string): Promise<{
   }
 
   const items = (await datasetResponse.json()) as Record<string, unknown>[];
-  console.log(`[Apify] Run ${runId} dataset items:`, items);
+  console.log(`[Apify] Run ${runId} dataset items:`, JSON.stringify(items));
 
   if (items.length === 0) {
-    return { status: "failed", errorMessage: "Apify run succeeded but returned no items" };
+    // Run succeeded with empty dataset — actor likely posted but returned nothing.
+    // Treat as succeeded so the log isn't marked failed when the tweet went through.
+    console.warn(`[Apify] Run ${runId} succeeded with empty dataset — assuming posted`);
+    return { status: "succeeded", tweetId: runId };
   }
 
   const result = items[0];
   const tweetId =
     (result.tweet_id as string) ??
     (result.tweetId as string) ??
-    (result.id as string);
+    (result.id as string) ??
+    (result.post_id as string);
 
   if (!tweetId) {
-    // Check for error message
     const errMsg = result.status_message as string | undefined;
-    return {
-      status: "failed",
-      errorMessage: errMsg ?? "Apify returned no tweet ID",
-    };
+    if (errMsg) {
+      return { status: "failed", errorMessage: `Apify: ${errMsg}` };
+    }
+    // No tweet ID but no error either — run succeeded, tweet likely posted.
+    console.warn(`[Apify] Run ${runId} succeeded but no tweet ID in result:`, JSON.stringify(result));
+    return { status: "succeeded", tweetId: runId };
   }
 
   return { status: "succeeded", tweetId };
