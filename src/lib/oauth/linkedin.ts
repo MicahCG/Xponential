@@ -3,7 +3,7 @@ import crypto from "crypto";
 const LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 
-const SCOPES = ["openid", "profile", "w_member_social"];
+const SCOPES = ["r_liteprofile", "r_emailaddress", "w_member_social"];
 
 export function generateState() {
   return crypto.randomBytes(16).toString("hex");
@@ -88,18 +88,23 @@ export async function refreshAccessToken(params: {
 }
 
 export async function getUserProfile(accessToken: string) {
-  const res = await fetch("https://api.linkedin.com/v2/userinfo", {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const res = await fetch(
+    "https://api.linkedin.com/v2/me?projection=(id,localizedFirstName,localizedLastName)",
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
 
   if (!res.ok) {
     throw new Error("Failed to fetch LinkedIn profile");
   }
 
-  return res.json() as Promise<{
-    sub: string;
-    name: string;
-    email?: string;
-    picture?: string;
-  }>;
+  const data = await res.json() as {
+    id: string;
+    localizedFirstName: string;
+    localizedLastName: string;
+  };
+
+  return {
+    sub: data.id,
+    name: `${data.localizedFirstName} ${data.localizedLastName}`.trim(),
+  };
 }

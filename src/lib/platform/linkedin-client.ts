@@ -1,17 +1,23 @@
 export async function getLinkedInProfile(accessToken: string) {
-  const res = await fetch("https://api.linkedin.com/v2/userinfo", {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const res = await fetch(
+    "https://api.linkedin.com/v2/me?projection=(id,localizedFirstName,localizedLastName)",
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
 
   if (!res.ok) {
     throw new Error("Failed to fetch LinkedIn profile");
   }
 
-  return res.json() as Promise<{
-    sub: string;
-    name: string;
-    email?: string;
-  }>;
+  const data = await res.json() as {
+    id: string;
+    localizedFirstName: string;
+    localizedLastName: string;
+  };
+
+  return {
+    sub: data.id,
+    name: `${data.localizedFirstName} ${data.localizedLastName}`.trim(),
+  };
 }
 
 export async function createLinkedInPost(
