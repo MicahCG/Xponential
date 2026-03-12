@@ -30,6 +30,7 @@ model User {
   autoReplyLogs       AutoReplyLog[]
   contentLearnings    ContentLearning[]
   followerSnapshots   FollowerSnapshot[]
+  videoPosts          VideoPost[]
 
   @@map("users")
 }
@@ -283,4 +284,25 @@ model AutoReplyLog {
 
   @@index([userId, createdAt])
   @@map("auto_reply_logs")
+}
+
+model VideoPost {
+  id                  String    @id @default(cuid())
+  userId              String    @map("user_id")
+  tweetText           String    @map("tweet_text") @db.Text
+  videoPrompt         String    @map("video_prompt") @db.Text
+  movieRootId         String?   @map("movie_root_id")
+  videoUrl            String?   @map("video_url")
+  apifyRunId          String?   @map("apify_run_id")
+  platformPostId      String?   @map("platform_post_id")
+  status              String    @default("pending")
+  errorMessage        String?   @map("error_message") @db.Text
+  generationStartedAt DateTime? @map("generation_started_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  postedAt            DateTime? @map("posted_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@map("video_posts")
 }

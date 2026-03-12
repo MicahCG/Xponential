@@ -1,6 +1,7 @@
 {
   "functions": {
     "src/app/api/cron/process-videos/route.ts": { "maxDuration": 300 },
+    "src/app/api/cron/process-video-posts/route.ts": { "maxDuration": 300 },
     "src/app/api/video/post/route.ts": { "maxDuration": 300 }
   },
   "crons": [
@@ -27,6 +28,10 @@
     {
       "path": "/api/cron/linkedin-auto-reply",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/process-video-posts",
+      "schedule": "*/3 * * * *"
     }
   ]
 }

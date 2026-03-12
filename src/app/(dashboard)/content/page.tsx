@@ -57,6 +57,17 @@ interface WatchedAccount {
   category: string | null;
 }
 
+interface VideoPost {
+  id: string;
+  tweetText: string;
+  videoPrompt: string;
+  status: string;
+  errorMessage: string | null;
+  createdAt: string;
+  postedAt: string | null;
+  platformPostId: string | null;
+}
+
 interface LinkedInPost {
   id: string;
   content: string;
@@ -398,6 +409,160 @@ function LinkedInTab() {
 
 // ─── X Tab ───────────────────────────────────────────────────
 
+// ─── Video Post Section ───────────────────────────────────────
+
+const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+  pending:          { label: "Queued",          variant: "secondary" },
+  generating_video: { label: "Generating...",   variant: "secondary" },
+  posting:          { label: "Posting...",       variant: "default" },
+  posted:           { label: "Posted",           variant: "default" },
+  failed:           { label: "Failed",           variant: "destructive" },
+};
+
+function VideoPostSection() {
+  const [tweetText, setTweetText]   = useState("");
+  const [videoPrompt, setVideoPrompt] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError]           = useState<string | null>(null);
+  const [success, setSuccess]       = useState(false);
+  const [posts, setPosts]           = useState<VideoPost[]>([]);
+  const [polling, setPolling]       = useState(false);
+
+  const fetchPosts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/video-posts");
+      if (res.ok) {
+        const data = await res.json();
+        setPosts(data.posts ?? []);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { fetchPosts(); }, [fetchPosts]);
+
+  // Poll while any post is in-progress
+  useEffect(() => {
+    const inProgress = posts.some((p) => ["pending", "generating_video", "posting"].includes(p.status));
+    if (!inProgress) { setPolling(false); return; }
+    setPolling(true);
+    const t = setInterval(fetchPosts, 15000);
+    return () => clearInterval(t);
+  }, [posts, fetchPosts]);
+
+  const triggerCron = async () => {
+    try { await fetch("/api/cron/process-video-posts"); } catch { /* ignore */ }
+  };
+
+  const handleSubmit = async () => {
+    setError(null);
+    setSuccess(false);
+    if (!tweetText.trim()) { setError("Tweet text is required."); return; }
+    if (!videoPrompt.trim()) { setError("Video prompt is required."); return; }
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/video-posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tweetText: tweetText.trim(), videoPrompt: videoPrompt.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Failed to queue post."); return; }
+      setSuccess(true);
+      setTweetText("");
+      setVideoPrompt("");
+      await fetchPosts();
+      await triggerCron();
+      setTimeout(() => setSuccess(false), 4000);
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Video className="h-5 w-5" />
+          <CardTitle className="text-lg">Post Video to X</CardTitle>
+        </div>
+        <CardDescription>
+          Generate a Popcorn video and auto-post it to your X profile.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Form */}
+        <div className="space-y-3">
+          <div>
+            <label className="text-sm font-medium mb-1 block">Tweet text</label>
+            <Textarea
+              placeholder="What do you want to say? (max 280 chars)"
+              value={tweetText}
+              onChange={(e) => setTweetText(e.target.value)}
+              maxLength={280}
+              rows={2}
+              className="resize-none"
+            />
+            <p className="text-xs text-muted-foreground text-right mt-1">{tweetText.length}/280</p>
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1 block">Video prompt</label>
+            <Textarea
+              placeholder="Describe the video to generate (e.g. 'A muppet building a startup in a garage')"
+              value={videoPrompt}
+              onChange={(e) => setVideoPrompt(e.target.value)}
+              rows={2}
+              className="resize-none"
+            />
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          {success && <p className="text-sm text-green-600">Video post queued! Generating now...</p>}
+          <Button onClick={handleSubmit} disabled={submitting} className="w-full gap-2">
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {submitting ? "Queuing..." : "Generate & Post"}
+          </Button>
+        </div>
+
+        {/* Recent posts */}
+        {posts.length > 0 && (
+          <div className="space-y-2 pt-2 border-t">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">Recent video posts</p>
+              {polling && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+            </div>
+            {posts.map((post) => {
+              const s = STATUS_LABELS[post.status] ?? { label: post.status, variant: "outline" as const };
+              return (
+                <div key={post.id} className="flex items-start justify-between gap-2 py-2 border-b last:border-0">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm truncate">{post.tweetText}</p>
+                    <p className="text-xs text-muted-foreground truncate">{post.videoPrompt}</p>
+                    {post.errorMessage && (
+                      <p className="text-xs text-destructive mt-0.5">{post.errorMessage}</p>
+                    )}
+                    {post.status === "posted" && post.platformPostId && (
+                      <a
+                        href={`https://x.com/i/web/status/${post.platformPostId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-500 hover:underline mt-0.5 block"
+                      >
+                        View tweet
+                      </a>
+                    )}
+                  </div>
+                  <Badge variant={s.variant} className="shrink-0 text-xs">{s.label}</Badge>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function XTab() {
   const [accounts, setAccounts] = useState<WatchedAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -721,6 +886,9 @@ function XTab() {
           </CardContent>
         </Card>
       )}
+
+      {/* Video post creator */}
+      <VideoPostSection />
 
       {/* Recent replies feed */}
       <ReplyFeed platform="x" />
