@@ -164,10 +164,10 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
 
   for (const log of inProgressLogs) {
     try {
-      // Check if this job has been stuck for too long (>30 minutes from when Popcorn was called)
+      // Check if this job has been stuck for too long (>45 minutes from when Popcorn was called)
       const generationStart = log.generationStartedAt ?? log.createdAt;
       const ageMs = Date.now() - new Date(generationStart).getTime();
-      const maxAgeMs = 30 * 60 * 1000;
+      const maxAgeMs = 45 * 60 * 1000;
       if (ageMs > maxAgeMs) {
         const timeoutMsg = `Video generation timed out after ${Math.round(ageMs / 60000)} minutes`;
         await prisma.autoReplyLog.update({
