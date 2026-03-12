@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { postTweetWithRetry, XPostError } from "@/lib/platform/x-client";
 import { postLinkedInComment } from "@/lib/platform/linkedin-client";
+import { compressVideo } from "@/lib/video/compress";
 
 export async function PUT(
   request: NextRequest,
@@ -86,11 +87,16 @@ export async function PUT(
       );
       postedId = result.id;
     } else {
+      // Compress video through Cloudinary before posting (GCS files are ~6.5MB, over the limit)
+      let mediaUrl = replyLog.videoUrl ?? undefined;
+      if (mediaUrl) {
+        mediaUrl = await compressVideo(mediaUrl);
+      }
       const result = await postTweetWithRetry(
         session.user.id,
         contentToPost,
         replyLog.targetTweetId,
-        replyLog.videoUrl ?? undefined
+        mediaUrl
       );
       postedId = result.id;
     }

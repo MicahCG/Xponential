@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { XPostError } from "./x-client";
 
-const APIFY_ACTOR_ID = "T0jPxQieOXCJdsbFP";
+const APIFY_ACTOR_ID = "pixelated_pulse~twitter-poster";
 const APIFY_API_BASE = "https://api.apify.com/v2";
 
 function getApifyToken(): string {
@@ -53,13 +53,13 @@ async function getTwitterCookie(userId: string): Promise<string> {
  * Uses cookie-based auth instead of the official X API, which avoids
  * the write-permission issues with OAuth 2.0 app tokens.
  *
- * Apify actor input schema (all strings):
+ * Apify actor: pixelated_pulse~twitter-poster (browser automation method)
+ * Input schema (all strings):
  *   - cookie (required): Twitter session cookie (Header String format from Cookie-Editor extension)
- *   - tweetContent (required): The text to post
+ *   - tweetText (required): The text to post
+ *   - postingMethod: "browser" (required to use cookie auth instead of API keys)
  *   - replyTweetId: ID of the tweet to reply to
  *   - mediaUrl: URL of image or video to attach
- *   - delegated_username: Delegated account username
- *   - schedule: Scheduled send time (Europe/London UTC+0, e.g. "2025-02-11 10:37:00")
  */
 /**
  * Starts a tweet post via Apify WITHOUT waiting for completion.
@@ -84,7 +84,16 @@ export async function startTweetViaApify(
   const cookie = await getTwitterCookie(userId);
   const token = getApifyToken();
 
-  const input: Record<string, string> = { cookie, tweetContent: text };
+  // Browser method requires twitterAuthToken extracted from the cookie string
+  const authTokenMatch = cookie.match(/auth_token=([^;]+)/);
+  const twitterAuthToken = authTokenMatch ? authTokenMatch[1] : undefined;
+
+  const input: Record<string, string> = {
+    cookie,
+    tweetText: text,
+    postingMethod: "browser",
+    ...(twitterAuthToken && { twitterAuthToken }),
+  };
   if (replyToId) input.replyTweetId = replyToId;
   if (mediaUrl) input.mediaUrl = mediaUrl;
 
@@ -95,8 +104,7 @@ export async function startTweetViaApify(
   );
 
   // Start async — no waitForFinish, returns immediately with run ID.
-  // For video runs, set timeout=300 (5min) so Twitter's transcoding has time to complete.
-  // Default actor timeout is 120s which is not enough for video upload + processing.
+  // Browser actor takes ~30s for text, up to 3min for video.
   const timeout = mediaUrl ? 300 : 120;
   const runUrl = `${APIFY_API_BASE}/acts/${APIFY_ACTOR_ID}/runs?token=${token}&timeout=${timeout}`;
   const runResponse = await fetch(runUrl, {
@@ -227,9 +235,15 @@ export async function postTweetViaApify(
   const cookie = await getTwitterCookie(userId);
   const token = getApifyToken();
 
+  // Browser method requires twitterAuthToken extracted from the cookie string
+  const authTokenMatch = cookie.match(/auth_token=([^;]+)/);
+  const twitterAuthToken = authTokenMatch ? authTokenMatch[1] : undefined;
+
   const input: Record<string, string> = {
     cookie,
-    tweetContent: text,
+    tweetText: text,
+    postingMethod: "browser",
+    ...(twitterAuthToken && { twitterAuthToken }),
   };
 
   if (replyToId) {
@@ -240,9 +254,7 @@ export async function postTweetViaApify(
     input.mediaUrl = mediaUrl;
   }
 
-  // Video uploads require more time: Apify must download the file, upload to
-  // Twitter's media API (chunked), wait for processing, then post.
-  // Use 300s for video, 60s for text-only.
+  // Browser actor takes ~30s for text, up to 3min for video.
   const waitForFinish = mediaUrl ? 300 : 60;
 
   console.log(
