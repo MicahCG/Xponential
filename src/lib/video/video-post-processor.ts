@@ -2,15 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { createMovie, getMovieStatus, getMovieUrl, triggerWatermarkedVideo } from "@/lib/video/popcorn";
 import { startTweetViaApify, checkApifyRun } from "@/lib/platform/apify-poster";
 import { compressVideo } from "@/lib/video/compress";
-
-async function getPopcornUserId(userId: string): Promise<string | null> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { settings: true },
-  });
-  const settings = (user?.settings ?? {}) as Record<string, unknown>;
-  return (settings.popcornUserId as string) ?? null;
-}
+import { getVideoSettings } from "@/lib/video/settings";
 
 export async function processVideoPosts() {
   const result = { kicked: 0, ready: 0, posting: 0, posted: 0, failed: 0, stillProcessing: 0, errors: [] as string[] };
@@ -24,16 +16,16 @@ export async function processVideoPosts() {
 
   for (const post of newPosts) {
     try {
-      const popcornUserId = await getPopcornUserId(post.userId);
-      if (!popcornUserId) throw new Error("No Popcorn User ID configured.");
+      const videoSettings = await getVideoSettings(post.userId);
+      if (!videoSettings.popcornUserId) throw new Error("No Popcorn User ID configured.");
 
       const movie = await createMovie({
         prompt: post.videoPrompt,
-        duration: "15",
-        orientation: "vertical",
-        quality: "budget",
-        style: "muppet",
-        userId: popcornUserId,
+        duration: videoSettings.duration,
+        orientation: videoSettings.orientation,
+        quality: videoSettings.quality,
+        style: videoSettings.style,
+        userId: videoSettings.popcornUserId,
       });
 
       await prisma.videoPost.update({

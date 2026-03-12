@@ -16,7 +16,12 @@ export async function GET() {
   const settings = (user?.settings ?? {}) as Record<string, unknown>;
 
   return NextResponse.json({
-    popcornUserId: (settings.popcornUserId as string) ?? null,
+    popcornUserId:        (settings.popcornUserId as string)        ?? null,
+    videoStyle:           (settings.videoStyle as string)           ?? "muppet",
+    videoQuality:         (settings.videoQuality as string)         ?? "budget",
+    videoDuration:        (settings.videoDuration as string)        ?? "15",
+    videoOrientation:     (settings.videoOrientation as string)     ?? "vertical",
+    videoPromptTemplate:  (settings.videoPromptTemplate as string)  ?? "Create a video based off this tweet {tweet_url}",
   });
 }
 
@@ -27,7 +32,14 @@ export async function PUT(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { popcornUserId } = body as { popcornUserId?: string };
+  const {
+    popcornUserId,
+    videoStyle,
+    videoQuality,
+    videoDuration,
+    videoOrientation,
+    videoPromptTemplate,
+  } = body as Record<string, string | undefined>;
 
   if (!popcornUserId || typeof popcornUserId !== "string" || !popcornUserId.trim()) {
     return NextResponse.json(
@@ -45,6 +57,11 @@ export async function PUT(request: NextRequest) {
   const updatedSettings = {
     ...currentSettings,
     popcornUserId: popcornUserId.trim(),
+    ...(videoStyle            && { videoStyle: videoStyle.trim() }),
+    ...(videoQuality          && { videoQuality: videoQuality.trim() }),
+    ...(videoDuration         && { videoDuration: videoDuration.trim() }),
+    ...(videoOrientation      && { videoOrientation: videoOrientation.trim() }),
+    ...(videoPromptTemplate   && { videoPromptTemplate: videoPromptTemplate.trim() }),
   };
 
   await prisma.user.update({
@@ -52,7 +69,7 @@ export async function PUT(request: NextRequest) {
     data: { settings: updatedSettings },
   });
 
-  return NextResponse.json({ success: true, popcornUserId: popcornUserId.trim() });
+  return NextResponse.json({ success: true });
 }
 
 export async function DELETE() {

@@ -3,6 +3,7 @@ import { createMovie, getMovieStatus, getMovieUrl, triggerWatermarkedVideo } fro
 import { generateContent } from "@/lib/content/generator";
 import { startTweetViaApify, checkApifyRun } from "@/lib/platform/apify-poster";
 import { compressVideo } from "@/lib/video/compress";
+import { getVideoSettings, buildPrompt } from "@/lib/video/settings";
 
 export interface VideoProcessResult {
   kicked: number;
@@ -14,26 +15,6 @@ export interface VideoProcessResult {
   errors: string[];
 }
 
-/**
- * Builds a Popcorn video prompt based on the tweet being replied to.
- * The prompt drives the visual content of the generated video.
- */
-function buildVideoPrompt(targetAuthor: string, targetTweetId: string): string {
-  return `Create a video based off this tweet https://x.com/${targetAuthor}/status/${targetTweetId}`;
-}
-
-/**
- * Looks up the user's Popcorn account ID from their settings.
- * This is the userId sent to the Popcorn createMovie API.
- */
-async function getPopcornUserId(userId: string): Promise<string | null> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { settings: true },
-  });
-  const settings = (user?.settings ?? {}) as Record<string, unknown>;
-  return (settings.popcornUserId as string) ?? null;
-}
 
 /**
  * Two-phase video reply processor designed for serverless environments.
@@ -98,27 +79,24 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
         );
       }
 
-      // Look up the user's Popcorn account ID
-      const popcornUserId = await getPopcornUserId(log.userId);
-      if (!popcornUserId) {
+      // Load user's video generation settings
+      const videoSettings = await getVideoSettings(log.userId);
+      if (!videoSettings.popcornUserId) {
         throw new Error(
           "No Popcorn User ID configured. Add it in Settings to enable video replies."
         );
       }
 
-      // Kick off video generation
-      const videoPrompt = buildVideoPrompt(
-        log.targetAuthor,
-        log.targetTweetId
-      );
+      // Build prompt from user's template
+      const videoPrompt = buildPrompt(videoSettings.promptTemplate, log.targetAuthor, log.targetTweetId);
 
       const movie = await createMovie({
         prompt: videoPrompt,
-        duration: "15",
-        orientation: "vertical",
-        quality: "budget",
-        style: "muppet",
-        userId: popcornUserId,
+        duration: videoSettings.duration,
+        orientation: videoSettings.orientation,
+        quality: videoSettings.quality,
+        style: videoSettings.style,
+        userId: videoSettings.popcornUserId,
       });
 
       // Store movieRootId and caption, move to "generating_video" status
