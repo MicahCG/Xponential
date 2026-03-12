@@ -53,7 +53,7 @@ export async function processVideoPosts() {
   for (const post of generatingPosts) {
     try {
       const ageMs = Date.now() - new Date(post.generationStartedAt ?? post.createdAt).getTime();
-      if (ageMs > 45 * 60 * 1000) {
+      if (ageMs > 60 * 60 * 1000) {
         await prisma.videoPost.update({ where: { id: post.id }, data: { status: "failed", errorMessage: "Video generation timed out" } });
         result.failed++;
         continue;
@@ -98,7 +98,7 @@ export async function processVideoPosts() {
   for (const post of postingPosts) {
     try {
       const ageMs = Date.now() - new Date(post.generationStartedAt ?? post.createdAt).getTime();
-      if (ageMs > 45 * 60 * 1000) {
+      if (ageMs > 60 * 60 * 1000) {
         await prisma.videoPost.update({ where: { id: post.id }, data: { status: "failed", errorMessage: "Posting timed out" } });
         result.failed++;
         continue;

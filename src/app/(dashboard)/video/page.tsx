@@ -33,7 +33,7 @@ type Stage =
 
 const INITIAL_DELAY_MS = 3 * 60 * 1000;  // wait 3 min before first check
 const POLL_INTERVAL_MS = 30 * 1000;       // then every 30s
-const MAX_POLL_MINUTES = 45;
+const MAX_POLL_MINUTES = 60;
 
 // ─── Stage metadata ──────────────────────────────────────────
 
@@ -130,7 +130,7 @@ export default function VideoPage() {
         setElapsedSeconds((s) => {
           if (s >= MAX_POLL_MINUTES * 60) {
             stopPolling();
-            setError("Video generation timed out after 45 minutes. Try again.");
+            setError("Video generation timed out after 60 minutes. Try again.");
             setStage("idle");
           }
           return s;
