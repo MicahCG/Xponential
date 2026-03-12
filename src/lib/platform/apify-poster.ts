@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { XPostError } from "./x-client";
 
-const APIFY_ACTOR_ID = "pixelated_pulse~twitter-poster";
+const APIFY_ACTOR_ID = "popcorn-co~twitter-video-poster";
 const APIFY_API_BASE = "https://api.apify.com/v2";
 
 function getApifyToken(): string {
@@ -53,13 +53,12 @@ async function getTwitterCookie(userId: string): Promise<string> {
  * Uses cookie-based auth instead of the official X API, which avoids
  * the write-permission issues with OAuth 2.0 app tokens.
  *
- * Apify actor: pixelated_pulse~twitter-poster (browser automation method)
+ * Apify actor: popcorn-co~twitter-video-poster (custom Playwright browser automation)
  * Input schema (all strings):
  *   - cookie (required): Twitter session cookie (Header String format from Cookie-Editor extension)
  *   - tweetText (required): The text to post
- *   - postingMethod: "browser" (required to use cookie auth instead of API keys)
  *   - replyTweetId: ID of the tweet to reply to
- *   - mediaUrl: URL of image or video to attach
+ *   - mediaUrl: Direct URL to an MP4 video to attach (Cloudinary compressed URL recommended)
  */
 /**
  * Starts a tweet post via Apify WITHOUT waiting for completion.
@@ -84,15 +83,9 @@ export async function startTweetViaApify(
   const cookie = await getTwitterCookie(userId);
   const token = getApifyToken();
 
-  // Browser method requires twitterAuthToken extracted from the cookie string
-  const authTokenMatch = cookie.match(/auth_token=([^;]+)/);
-  const twitterAuthToken = authTokenMatch ? authTokenMatch[1] : undefined;
-
   const input: Record<string, string> = {
     cookie,
     tweetText: text,
-    postingMethod: "browser",
-    ...(twitterAuthToken && { twitterAuthToken }),
   };
   if (replyToId) input.replyTweetId = replyToId;
   if (mediaUrl) input.mediaUrl = mediaUrl;
@@ -235,15 +228,9 @@ export async function postTweetViaApify(
   const cookie = await getTwitterCookie(userId);
   const token = getApifyToken();
 
-  // Browser method requires twitterAuthToken extracted from the cookie string
-  const authTokenMatch = cookie.match(/auth_token=([^;]+)/);
-  const twitterAuthToken = authTokenMatch ? authTokenMatch[1] : undefined;
-
   const input: Record<string, string> = {
     cookie,
     tweetText: text,
-    postingMethod: "browser",
-    ...(twitterAuthToken && { twitterAuthToken }),
   };
 
   if (replyToId) {
