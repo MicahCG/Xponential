@@ -11,6 +11,7 @@ import {
 import { ScrapeForm } from "@/components/personality/scrape-form";
 import { QuizForm } from "@/components/personality/quiz-form";
 import { FreetextForm } from "@/components/personality/freetext-form";
+import { UploadForm } from "@/components/personality/upload-form";
 import { ProfileDisplay } from "@/components/personality/profile-display";
 import type { PersonalityProfile } from "@/lib/personality/types";
 
@@ -71,6 +72,7 @@ export default function PersonalitySetupPage() {
           {method === "scrape" && <ScrapeForm onComplete={setResult} />}
           {method === "quiz" && <QuizForm onComplete={setResult} />}
           {method === "freetext" && <FreetextForm onComplete={setResult} />}
+          {method === "upload" && <UploadForm onComplete={setResult} />}
         </div>
       )}
     </div>

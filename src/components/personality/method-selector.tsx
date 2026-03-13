@@ -6,7 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Twitter, HelpCircle, FileText } from "lucide-react";
+import { Twitter, HelpCircle, FileText, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const methods = [
@@ -32,6 +32,14 @@ const methods = [
     description:
       "Write a free-form description of how you want the agent to sound.",
     icon: FileText,
+    recommended: false,
+  },
+  {
+    id: "upload" as const,
+    title: "Upload a Document",
+    description:
+      "Upload a bio, writing samples, brand guide, or any document — we'll extract your voice from it.",
+    icon: Upload,
     recommended: false,
   },
 ];
