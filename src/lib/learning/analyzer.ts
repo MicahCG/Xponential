@@ -31,22 +31,24 @@ export interface DailyLearningResult {
   errors: string[];
 }
 
-const ANALYSIS_SYSTEM_PROMPT = `You are a social media performance analyst. You will be given a list of posts made by a user on a given day, along with their engagement metrics. Your job is to:
+const ANALYSIS_SYSTEM_PROMPT = `You are a social media performance analyst specializing in voice-driven content. You will be given a list of posts made by a user over the past week, along with their engagement metrics. Your job is to:
 
-1. Find patterns in what performed well vs poorly
-2. Generate hypotheses about WHY certain posts did better
-3. Give concrete, actionable guidance for future posts
+1. Find patterns in what performed well vs poorly — be specific and reference actual content
+2. Generate hypotheses about WHY certain posts did better (style, structure, topic, tone)
+3. Give concrete, actionable guidance that this specific person can apply going forward
 
-Be specific and data-driven. Reference actual numbers. Think like a growth strategist.
+Be specific and data-driven. Reference actual numbers and quote actual phrases that worked.
+Separate your analysis by post type where relevant (replies behave differently than originals).
 
-Analyze these dimensions when relevant:
-- Length: shorter vs longer posts
-- Tone: witty/ironic vs informative vs agreeable vs provocative
-- Format: questions vs statements vs lists
-- Timing: time of day
-- Content type: original takes vs replies vs quotes
-- Emoji use: posts with vs without
-- Style: specific phrases, hooks, openers that worked`;
+Analyze these dimensions:
+- Length: shorter vs longer, where brevity won vs detail won
+- Tone: witty/ironic vs informative vs agreeable vs provocative — which resonated
+- Opening hook: what first lines drove more reads
+- Reply strategy: what angles get replies vs just likes
+- Format: questions vs statements vs observations
+- Content type: original takes vs replies vs quotes — which drives more engagement for this user
+- Emoji use: did it help or hurt for this person
+- Specific phrases, hooks, or structures that appear in the best performers`;
 
 function computeEngagementScore(e: PostWithMetrics["engagement"]): number {
   // Weighted score: impressions matter less than direct interactions
@@ -116,11 +118,11 @@ async function analyzeUserPosts(
 
   const postsText = formatPostsForAnalysis(posts);
 
-  const userPrompt = `Here are ${posts.length} posts from yesterday on ${platform}, ranked by their engagement:
+  const userPrompt = `Here are ${posts.length} posts from the past 7 days on ${platform}, ranked by their engagement score (highest first):
 
 ${postsText}
 
-Analyze these posts and identify patterns in what drove engagement vs what didn't. Generate specific, actionable insights.`;
+Analyze these posts and identify patterns in what drove engagement vs what didn't. Be specific — quote actual phrases, reference actual numbers, and distinguish between replies and original posts where relevant. Generate actionable insights this person can apply immediately.`;
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
@@ -167,15 +169,14 @@ export async function runDailyLearning(): Promise<DailyLearningResult> {
     errors: [],
   };
 
-  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const today = new Date();
-  const analysisDate = new Date(yesterday);
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const analysisDate = new Date();
   analysisDate.setHours(0, 0, 0, 0);
 
-  // Get all posts from last 24h that have metrics
+  // Get all posts from last 7 days that have metrics
   const posts = await prisma.postHistory.findMany({
     where: {
-      postedAt: { gte: yesterday },
+      postedAt: { gte: sevenDaysAgo },
       metricsUpdatedAt: { not: null },
     },
     select: {

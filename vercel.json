@@ -2,6 +2,7 @@
   "functions": {
     "src/app/api/cron/process-videos/route.ts": { "maxDuration": 300 },
     "src/app/api/cron/process-video-posts/route.ts": { "maxDuration": 300 },
+    "src/app/api/cron/evolve-profiles/route.ts": { "maxDuration": 300 },
     "src/app/api/video/post/route.ts": { "maxDuration": 300 }
   },
   "crons": [
@@ -32,6 +33,10 @@
     {
       "path": "/api/cron/process-video-posts",
       "schedule": "*/3 * * * *"
+    },
+    {
+      "path": "/api/cron/evolve-profiles",
+      "schedule": "0 2 * * 0"
     }
   ]
 }

@@ -18,7 +18,7 @@ export async function pollEngagement(): Promise<EngagementPollResult> {
     errors: [],
   };
 
-  const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   // Find all eligible posts grouped by user
   const posts = await prisma.postHistory.findMany({

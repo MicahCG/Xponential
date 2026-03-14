@@ -11,7 +11,7 @@ export async function getRecentLearnings(
   userId: string,
   platform: Platform
 ): Promise<string | null> {
-  const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const records = await prisma.contentLearning.findMany({
     where: {
@@ -20,7 +20,7 @@ export async function getRecentLearnings(
       date: { gte: cutoff },
     },
     orderBy: { date: "desc" },
-    take: 7,
+    take: 14,
     select: { insights: true, date: true, postsAnalyzed: true },
   });
 
@@ -46,8 +46,8 @@ export async function getRecentLearnings(
     return order[a.confidence] - order[b.confidence];
   });
 
-  // Cap at top 8 insights to keep prompt lean
-  const top = ranked.slice(0, 8);
+  // Cap at top 12 insights to keep prompt lean
+  const top = ranked.slice(0, 12);
 
   if (top.length === 0) return null;
 
