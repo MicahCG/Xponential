@@ -26,6 +26,11 @@ export async function POST(request: NextRequest) {
       samplePosts: parsed.data.samplePosts,
     });
 
+    const existing = await prisma.personalityProfile.findFirst({
+      where: { userId: session.user.id, isActive: true },
+      select: { replyInstructions: true, feedbackExamples: true },
+    });
+
     await prisma.personalityProfile.updateMany({
       where: { userId: session.user.id, isActive: true },
       data: { isActive: false },
@@ -37,6 +42,8 @@ export async function POST(request: NextRequest) {
         method: "freetext",
         rawInput: JSON.parse(JSON.stringify(parsed.data)),
         profileData: JSON.parse(JSON.stringify(profile)),
+        replyInstructions: existing?.replyInstructions ?? null,
+        feedbackExamples: existing?.feedbackExamples ?? undefined,
       },
     });
 

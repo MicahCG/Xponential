@@ -78,6 +78,11 @@ export async function POST(request: NextRequest) {
       description: `The following is a document uploaded by the user to define their personality and communication style:\n\n${description}`,
     });
 
+    const existing = await prisma.personalityProfile.findFirst({
+      where: { userId: session.user.id, isActive: true },
+      select: { replyInstructions: true, feedbackExamples: true },
+    });
+
     await prisma.personalityProfile.updateMany({
       where: { userId: session.user.id, isActive: true },
       data: { isActive: false },
@@ -89,6 +94,8 @@ export async function POST(request: NextRequest) {
         method: "freetext",
         rawInput: { fileName: file.name, charCount: trimmed.length },
         profileData: JSON.parse(JSON.stringify(profile)),
+        replyInstructions: existing?.replyInstructions ?? null,
+        feedbackExamples: existing?.feedbackExamples ?? undefined,
       },
     });
 

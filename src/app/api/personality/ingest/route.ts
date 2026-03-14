@@ -36,7 +36,12 @@ export async function POST() {
       ingestedData,
     });
 
-    // Step 3: Deactivate existing profiles and save new one
+    // Step 3: Carry over feedback, deactivate existing profiles, save new one
+    const existing = await prisma.personalityProfile.findFirst({
+      where: { userId: userId, isActive: true },
+      select: { replyInstructions: true, feedbackExamples: true },
+    });
+
     await prisma.personalityProfile.updateMany({
       where: { userId: userId, isActive: true },
       data: { isActive: false },
@@ -55,6 +60,8 @@ export async function POST() {
           })
         ),
         profileData: JSON.parse(JSON.stringify(profile)),
+        replyInstructions: existing?.replyInstructions ?? null,
+        feedbackExamples: existing?.feedbackExamples ?? undefined,
       },
     });
 
