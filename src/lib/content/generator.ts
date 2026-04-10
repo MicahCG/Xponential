@@ -1,4 +1,4 @@
-import { openai } from "@/lib/openai";
+import { anthropic, CLAUDE_MODEL } from "@/lib/anthropic";
 import { prisma } from "@/lib/prisma";
 import type { PersonalityProfile } from "@/lib/personality/types";
 import type { GenerateRequest, GeneratedContent } from "./types";
@@ -12,14 +12,18 @@ import { buildMemoryContext } from "./memory";
 import { getRecentLearnings } from "@/lib/learning/injector";
 import { DEFAULT_GENERATION_COUNT } from "@/lib/constants";
 
-const GENERATION_SYSTEM_PROMPT = `You are a content generation engine for social media. Your job is to produce content that perfectly matches a given personality profile.
+const GENERATION_SYSTEM_PROMPT = `You are a content generation engine for social media. Your job is to produce content that perfectly matches a given personality profile while maximizing engagement (likes, retweets, replies).
 
 Rules:
 - Every option must feel like it was written by the same person
 - Never produce generic, corporate, or AI-sounding content
 - Each option should take a different angle or approach
 - Respect character limits strictly
-- If the personality says "never" do something, don't do it`;
+- If the personality says "never" do something, don't do it
+- NEVER use em dashes (—) or en dashes (–) anywhere in generated content. Use commas, periods, colons, or restructure the sentence instead
+- Prioritize being witty, informative, and insightful. Replies should feel like they come from someone with genuine expertise or a sharp perspective
+- Optimize for engagement: punchy hooks, strong takes, and conversational tone that invites interaction
+- Avoid filler phrases, hedging language, and safe/bland observations. Every word should earn its place`;
 
 const CONTENT_OPTIONS_SCHEMA = {
   type: "object" as const,
@@ -139,32 +143,27 @@ export async function generateContent(
       break;
   }
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+  const response = await anthropic.messages.create({
+    model: CLAUDE_MODEL,
     max_tokens: 2000,
-    messages: [
-      { role: "system", content: GENERATION_SYSTEM_PROMPT },
-      { role: "user", content: prompt },
-    ],
+    system: GENERATION_SYSTEM_PROMPT,
+    messages: [{ role: "user", content: prompt }],
     tools: [
       {
-        type: "function",
-        function: {
-          name: "submit_content_options",
-          description: "Submit the generated content options",
-          parameters: CONTENT_OPTIONS_SCHEMA,
-        },
+        name: "submit_content_options",
+        description: "Submit the generated content options",
+        input_schema: CONTENT_OPTIONS_SCHEMA,
       },
     ],
-    tool_choice: { type: "function", function: { name: "submit_content_options" } },
+    tool_choice: { type: "tool", name: "submit_content_options" },
   });
 
-  const toolCall = response.choices[0]?.message?.tool_calls?.[0];
-  if (!toolCall || toolCall.type !== "function") {
+  const toolBlock = response.content.find((b) => b.type === "tool_use");
+  if (!toolBlock || toolBlock.type !== "tool_use") {
     throw new Error("Failed to generate content");
   }
 
-  const result = JSON.parse(toolCall.function.arguments) as {
+  const result = toolBlock.input as {
     options: { content: string; reasoning: string }[];
   };
 

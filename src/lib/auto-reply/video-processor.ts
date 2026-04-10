@@ -3,7 +3,7 @@ import { createMovie, getMovieStatus, getMovieUrl, triggerWatermarkedVideo } fro
 import { generateContent } from "@/lib/content/generator";
 import { startTweetViaApify, checkApifyRun } from "@/lib/platform/apify-poster";
 import { compressVideo } from "@/lib/video/compress";
-import { getVideoSettings, buildPrompt } from "@/lib/video/settings";
+import { getVideoSettings, generateDynamicVideoPrompt } from "@/lib/video/settings";
 
 export interface VideoProcessResult {
   kicked: number;
@@ -87,8 +87,16 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
         );
       }
 
-      // Build prompt from user's template
-      const videoPrompt = buildPrompt(videoSettings.promptTemplate, log.targetAuthor, log.targetTweetId);
+      // Generate a dynamic, context-aware video prompt based on the tweet
+      const videoPrompt = await generateDynamicVideoPrompt({
+        tweetText: log.targetTweetText,
+        targetAuthor: log.targetAuthor,
+        targetTweetId: log.targetTweetId,
+        replyCaption: caption || undefined,
+        style: videoSettings.style,
+        duration: videoSettings.duration,
+        fallbackTemplate: videoSettings.promptTemplate,
+      });
 
       const movie = await createMovie({
         prompt: videoPrompt,

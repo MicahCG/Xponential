@@ -1,4 +1,4 @@
-import { openai } from "@/lib/openai";
+import { anthropic, CLAUDE_MODEL } from "@/lib/anthropic";
 import type { IngestedProfile } from "./scraper";
 
 export interface AccountRecommendation {
@@ -104,36 +104,28 @@ Pick up to 10 accounts that would be the most valuable for auto-reply engagement
 Assign a category tag to each recommendation.`;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+    const response = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
       max_tokens: 1500,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You recommend X accounts for a user to set up auto-replies to. Pick accounts that align with their interests and would give them visibility.",
-        },
-        { role: "user", content: prompt },
-      ],
+      system:
+        "You recommend X accounts for a user to set up auto-replies to. Pick accounts that align with their interests and would give them visibility.",
+      messages: [{ role: "user", content: prompt }],
       tools: [
         {
-          type: "function",
-          function: {
-            name: "submit_recommendations",
-            description: "Submit account recommendations",
-            parameters: RECOMMENDATION_SCHEMA,
-          },
+          name: "submit_recommendations",
+          description: "Submit account recommendations",
+          input_schema: RECOMMENDATION_SCHEMA,
         },
       ],
-      tool_choice: { type: "function", function: { name: "submit_recommendations" } },
+      tool_choice: { type: "tool", name: "submit_recommendations" },
     });
 
-    const toolCall = response.choices[0]?.message?.tool_calls?.[0];
-    if (!toolCall || toolCall.type !== "function") {
+    const toolBlock = response.content.find((b) => b.type === "tool_use");
+    if (!toolBlock || toolBlock.type !== "tool_use") {
       return { engagedAccounts, recommendedAccounts: [] };
     }
 
-    const result = JSON.parse(toolCall.function.arguments) as {
+    const result = toolBlock.input as {
       recommendations: {
         username: string;
         category: string;

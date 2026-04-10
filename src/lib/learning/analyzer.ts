@@ -1,4 +1,4 @@
-import { openai } from "@/lib/openai";
+import { anthropic, CLAUDE_MODEL } from "@/lib/anthropic";
 import { prisma } from "@/lib/prisma";
 import type { Platform, PostType } from "@prisma/client";
 
@@ -33,7 +33,7 @@ export interface DailyLearningResult {
 
 const ANALYSIS_SYSTEM_PROMPT = `You are a social media performance analyst specializing in voice-driven content. You will be given a list of posts made by a user over the past week, along with their engagement metrics. Your job is to:
 
-1. Find patterns in what performed well vs poorly — be specific and reference actual content
+1. Find patterns in what performed well vs poorly, be specific and reference actual content
 2. Generate hypotheses about WHY certain posts did better (style, structure, topic, tone)
 3. Give concrete, actionable guidance that this specific person can apply going forward
 
@@ -42,13 +42,16 @@ Separate your analysis by post type where relevant (replies behave differently t
 
 Analyze these dimensions:
 - Length: shorter vs longer, where brevity won vs detail won
-- Tone: witty/ironic vs informative vs agreeable vs provocative — which resonated
+- Tone: witty/ironic vs informative vs agreeable vs provocative, which resonated
 - Opening hook: what first lines drove more reads
 - Reply strategy: what angles get replies vs just likes
 - Format: questions vs statements vs observations
-- Content type: original takes vs replies vs quotes — which drives more engagement for this user
+- Content type: original takes vs replies vs quotes, which drives more engagement for this user
 - Emoji use: did it help or hurt for this person
-- Specific phrases, hooks, or structures that appear in the best performers`;
+- Specific phrases, hooks, or structures that appear in the best performers
+- Punctuation: flag any use of em dashes or en dashes as a pattern to avoid (the user never wants these)
+
+Focus your actionable guidance on maximizing likes, retweets, and replies. The goal is engagement growth. Prioritize insights about what makes content witty, informative, and insightful over generic style observations.`;
 
 function computeEngagementScore(e: PostWithMetrics["engagement"]): number {
   // Weighted score: impressions matter less than direct interactions
@@ -124,30 +127,25 @@ ${postsText}
 
 Analyze these posts and identify patterns in what drove engagement vs what didn't. Be specific — quote actual phrases, reference actual numbers, and distinguish between replies and original posts where relevant. Generate actionable insights this person can apply immediately.`;
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+  const response = await anthropic.messages.create({
+    model: CLAUDE_MODEL,
     max_tokens: 2000,
-    messages: [
-      { role: "system", content: ANALYSIS_SYSTEM_PROMPT },
-      { role: "user", content: userPrompt },
-    ],
+    system: ANALYSIS_SYSTEM_PROMPT,
+    messages: [{ role: "user", content: userPrompt }],
     tools: [
       {
-        type: "function",
-        function: {
-          name: "submit_analysis",
-          description: "Submit the performance analysis and insights",
-          parameters: INSIGHTS_SCHEMA,
-        },
+        name: "submit_analysis",
+        description: "Submit the performance analysis and insights",
+        input_schema: INSIGHTS_SCHEMA,
       },
     ],
-    tool_choice: { type: "function", function: { name: "submit_analysis" } },
+    tool_choice: { type: "tool", name: "submit_analysis" },
   });
 
-  const toolCall = response.choices[0]?.message?.tool_calls?.[0];
-  if (!toolCall || toolCall.type !== "function") return null;
+  const toolBlock = response.content.find((b) => b.type === "tool_use");
+  if (!toolBlock || toolBlock.type !== "tool_use") return null;
 
-  const parsed = JSON.parse(toolCall.function.arguments) as {
+  const parsed = toolBlock.input as {
     insights: LearningInsight[];
     summary: string;
   };

@@ -1,4 +1,4 @@
-import { openai } from "@/lib/openai";
+import { anthropic, CLAUDE_MODEL } from "@/lib/anthropic";
 import type { AnalysisInput, PersonalityProfile } from "./types";
 import { PERSONALITY_PROFILE_SCHEMA } from "./types";
 import {
@@ -120,31 +120,26 @@ export async function analyzePersonality(
   const userMessage = formatInputForAnalysis(input);
   const isIngest = input.method === "ingest";
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+  const response = await anthropic.messages.create({
+    model: CLAUDE_MODEL,
     max_tokens: 3000,
-    messages: [
-      { role: "system", content: isIngest ? INGEST_SYSTEM_PROMPT : ANALYSIS_SYSTEM_PROMPT },
-      { role: "user", content: userMessage },
-    ],
+    system: isIngest ? INGEST_SYSTEM_PROMPT : ANALYSIS_SYSTEM_PROMPT,
+    messages: [{ role: "user", content: userMessage }],
     tools: [
       {
-        type: "function",
-        function: {
-          name: "save_personality_profile",
-          description:
-            "Save the analyzed personality profile. Call this with the complete profile data.",
-          parameters: PERSONALITY_PROFILE_SCHEMA,
-        },
+        name: "save_personality_profile",
+        description:
+          "Save the analyzed personality profile. Call this with the complete profile data.",
+        input_schema: PERSONALITY_PROFILE_SCHEMA,
       },
     ],
-    tool_choice: { type: "function", function: { name: "save_personality_profile" } },
+    tool_choice: { type: "tool", name: "save_personality_profile" },
   });
 
-  const toolCall = response.choices[0]?.message?.tool_calls?.[0];
-  if (!toolCall || toolCall.type !== "function") {
+  const toolBlock = response.content.find((b) => b.type === "tool_use");
+  if (!toolBlock || toolBlock.type !== "tool_use") {
     throw new Error("Failed to extract personality profile from analysis");
   }
 
-  return JSON.parse(toolCall.function.arguments) as PersonalityProfile;
+  return toolBlock.input as PersonalityProfile;
 }

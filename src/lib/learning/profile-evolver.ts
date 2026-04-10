@@ -1,4 +1,4 @@
-import { openai } from "@/lib/openai";
+import { anthropic, CLAUDE_MODEL } from "@/lib/anthropic";
 import { prisma } from "@/lib/prisma";
 import type { Platform } from "@prisma/client";
 import type { FeedbackExample } from "@/lib/content/prompts";
@@ -26,10 +26,13 @@ Your job is to:
 
 Rules:
 - The evolved instructions MUST preserve any explicit preferences from the current instructions (tone, language, topics to avoid, etc.)
-- Add new data-driven guidance ON TOP of existing preferences — never contradict them
+- Add new data-driven guidance ON TOP of existing preferences, never contradict them
 - Examples must come directly from their actual posts, not invented
 - Be specific: "start with a short punchy hook" is better than "be engaging"
-- Focus on what makes REPLIES perform well specifically — not just general posts`;
+- Focus on what makes REPLIES perform well specifically, not just general posts
+- ALWAYS include this rule in evolved instructions: never use em dashes or en dashes. Use commas, periods, colons, or restructure the sentence instead
+- Evolved instructions should push toward witty, informative, and insightful content that maximizes likes and engagement
+- Prioritize actionable patterns: what specific hooks, structures, and tones drove the most interaction`;
 
 function computeScore(engagement: Record<string, number>): {
   score: number;
@@ -127,30 +130,25 @@ ${params.currentInstructions || "(none set — derive from scratch based on what
 
 Generate evolved instructions and examples based on the actual performance data above.`;
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+  const response = await anthropic.messages.create({
+    model: CLAUDE_MODEL,
     max_tokens: 1500,
-    messages: [
-      { role: "system", content: EVOLVER_SYSTEM_PROMPT },
-      { role: "user", content: prompt },
-    ],
+    system: EVOLVER_SYSTEM_PROMPT,
+    messages: [{ role: "user", content: prompt }],
     tools: [
       {
-        type: "function",
-        function: {
-          name: "submit_evolution",
-          description: "Submit the evolved profile",
-          parameters: EVOLUTION_SCHEMA,
-        },
+        name: "submit_evolution",
+        description: "Submit the evolved profile",
+        input_schema: EVOLUTION_SCHEMA,
       },
     ],
-    tool_choice: { type: "function", function: { name: "submit_evolution" } },
+    tool_choice: { type: "tool", name: "submit_evolution" },
   });
 
-  const toolCall = response.choices[0]?.message?.tool_calls?.[0];
-  if (!toolCall || toolCall.type !== "function") return null;
+  const toolBlock = response.content.find((b) => b.type === "tool_use");
+  if (!toolBlock || toolBlock.type !== "tool_use") return null;
 
-  const parsed = JSON.parse(toolCall.function.arguments) as {
+  const parsed = toolBlock.input as {
     evolvedInstructions: string;
     doExamples: { text: string; note: string }[];
     dontExamples: { text: string; note: string }[];

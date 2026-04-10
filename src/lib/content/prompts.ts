@@ -91,7 +91,10 @@ Generate exactly ${params.count} reply options. Each must:
 - Match the personality profile exactly
 - Be contextually relevant to the original post
 - Sound authentic, not generic or AI-generated
-- Have a distinct angle/approach from the other options`;
+- Have a distinct angle/approach from the other options
+- NEVER use em dashes (—) or en dashes (–). Use commas, periods, colons, or restructure instead
+- Be witty, informative, or insightful as the context demands. Prioritize whatever angle will drive the most likes and engagement
+- Add genuine value: a sharp observation, a surprising fact, a clever reframe, or a thought-provoking question. Never just agree or restate what was said`;
 }
 
 export function buildOriginalPostPrompt(params: {
@@ -125,7 +128,9 @@ Generate exactly ${params.count} post options. Each must:
 - Match the personality profile exactly
 - Provide genuine value or insight on the topic
 - Sound authentic, not generic or AI-generated
-- Have a distinct angle from the other options`;
+- Have a distinct angle from the other options
+- NEVER use em dashes (—) or en dashes (–). Use commas, periods, colons, or restructure instead
+- Be witty, informative, or insightful. Optimize for engagement and shareability`;
 }
 
 export function buildQuotePrompt(params: {
@@ -158,5 +163,7 @@ Generate exactly ${params.count} commentary options. Each must:
 - Be under ${charLimit} characters
 - Add meaningful commentary (not just "great post!")
 - Match the personality profile exactly
-- Sound authentic, not generic`;
+- Sound authentic, not generic
+- NEVER use em dashes (—) or en dashes (–). Use commas, periods, colons, or restructure instead
+- Be witty, informative, or insightful. Add a perspective that makes people want to like and share`;
 }
