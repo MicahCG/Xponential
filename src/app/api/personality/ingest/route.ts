@@ -5,6 +5,7 @@ import { ingestFullProfile } from "@/lib/personality/scraper";
 import { analyzePersonality } from "@/lib/personality/analyzer";
 import { getAccountRecommendations } from "@/lib/personality/recommender";
 import { getValidAccessToken, getUsersByUsernames } from "@/lib/platform/x-client";
+import { ApiResponseError } from "twitter-api-v2";
 
 export async function POST() {
   const session = await auth();
@@ -169,6 +170,43 @@ export async function POST() {
     });
   } catch (error) {
     console.error("Profile ingestion error:", error);
+
+    // Surface actionable messages for common Twitter API errors
+    if (error instanceof ApiResponseError) {
+      const details = JSON.stringify(error.data ?? {});
+      console.error("Twitter API error details:", details);
+
+      if (error.code === 400) {
+        return NextResponse.json(
+          {
+            error:
+              "Could not read your X profile data. Your X Developer App may need " +
+              "the Basic tier ($100/mo) to access tweet timelines. Check your " +
+              "access level at developer.x.com.",
+          },
+          { status: 400 }
+        );
+      }
+
+      if (error.code === 403) {
+        return NextResponse.json(
+          {
+            error:
+              "Access denied by X API. Your app may not have permission to read " +
+              "tweet data. Check your app's access level and scopes at developer.x.com.",
+          },
+          { status: 403 }
+        );
+      }
+
+      if (error.code === 429) {
+        return NextResponse.json(
+          { error: "X API rate limit reached. Please wait a few minutes and try again." },
+          { status: 429 }
+        );
+      }
+    }
+
     return NextResponse.json(
       {
         error:

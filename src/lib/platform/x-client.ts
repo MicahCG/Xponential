@@ -216,23 +216,48 @@ export async function getUserTimelineWithReplies(
 
   let paginationToken: string | undefined;
   let fetched = 0;
+  let useSimpleParams = false;
 
   while (fetched < maxTweets) {
     const batchSize = Math.min(100, maxTweets - fetched);
-    const timeline = await client.v2.userTimeline(userId, {
-      max_results: batchSize,
-      exclude: ["retweets"],
-      "tweet.fields": [
-        "created_at",
-        "text",
-        "public_metrics",
-        "in_reply_to_user_id",
-        "referenced_tweets",
-      ],
-      expansions: ["referenced_tweets.id", "in_reply_to_user_id"],
-      "user.fields": ["username"],
-      ...(paginationToken ? { pagination_token: paginationToken } : {}),
-    });
+
+    let timeline;
+    try {
+      if (useSimpleParams) {
+        // Fallback: minimal parameters that work on all API tiers
+        timeline = await client.v2.userTimeline(userId, {
+          max_results: batchSize,
+          exclude: ["retweets"],
+          "tweet.fields": ["created_at", "text", "referenced_tweets"],
+          ...(paginationToken ? { pagination_token: paginationToken } : {}),
+        });
+      } else {
+        timeline = await client.v2.userTimeline(userId, {
+          max_results: batchSize,
+          exclude: ["retweets"],
+          "tweet.fields": [
+            "created_at",
+            "text",
+            "public_metrics",
+            "in_reply_to_user_id",
+            "referenced_tweets",
+          ],
+          expansions: ["referenced_tweets.id", "in_reply_to_user_id"],
+          "user.fields": ["username"],
+          ...(paginationToken ? { pagination_token: paginationToken } : {}),
+        });
+      }
+    } catch (err) {
+      if (!useSimpleParams && err instanceof ApiResponseError && err.code === 400) {
+        console.warn(
+          "[X API] Timeline fetch failed with 400, retrying with simpler parameters.",
+          "Error details:", JSON.stringify(err.data ?? err.message)
+        );
+        useSimpleParams = true;
+        continue;
+      }
+      throw err;
+    }
 
     const tweets = timeline.data.data ?? [];
     const users = timeline.data.includes?.users ?? [];
