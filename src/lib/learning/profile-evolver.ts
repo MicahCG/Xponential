@@ -32,7 +32,13 @@ Rules:
 - Focus on what makes REPLIES perform well specifically, not just general posts
 - ALWAYS include this rule in evolved instructions: never use em dashes or en dashes. Use commas, periods, colons, or restructure the sentence instead
 - Evolved instructions should push toward witty, informative, and insightful content that maximizes likes and engagement
-- Prioritize actionable patterns: what specific hooks, structures, and tones drove the most interaction`;
+- Prioritize actionable patterns: what specific hooks, structures, and tones drove the most interaction
+
+CRITICAL — PREVENT FORMAT REPETITION:
+- If the top-performing posts all share the same sentence template or structure (e.g., "[name] just discovered that [X] costs less than [Y]"), flag this as a MODE COLLAPSE problem. One repeating format signals staleness, not a winning formula.
+- Evolved instructions MUST explicitly require structural variety: questions, observations, analogies, metaphors, dry humor, hypotheticals, callbacks, short punchy takes, etc.
+- "Do this" examples should showcase DIVERSE formats that worked, not 3-5 examples of the same template. If only one format performed well, include it once and instruct the user to develop new formats for the remaining examples.
+- Never let evolved instructions prescribe a single sentence template to follow repeatedly`;
 
 function computeScore(engagement: Record<string, number>): {
   score: number;

@@ -50,6 +50,7 @@ Analyze these dimensions:
 - Emoji use: did it help or hurt for this person
 - Specific phrases, hooks, or structures that appear in the best performers
 - Punctuation: flag any use of em dashes or en dashes as a pattern to avoid (the user never wants these)
+- FORMAT REPETITION: If multiple posts use the same sentence template or structure (e.g., "[name] just discovered that [X]"), flag this as a HIGH CONFIDENCE issue. Repetitive formatting kills authenticity and makes the account look automated. Always recommend structural variety
 
 Focus your actionable guidance on maximizing likes, retweets, and replies. The goal is engagement growth. Prioritize insights about what makes content witty, informative, and insightful over generic style observations.`;
 

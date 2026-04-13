@@ -23,7 +23,8 @@ Rules:
 - NEVER use em dashes (—) or en dashes (–) anywhere in generated content. Use commas, periods, colons, or restructure the sentence instead
 - Prioritize being witty, informative, and insightful. Replies should feel like they come from someone with genuine expertise or a sharp perspective
 - Optimize for engagement: punchy hooks, strong takes, and conversational tone that invites interaction
-- Avoid filler phrases, hedging language, and safe/bland observations. Every word should earn its place`;
+- Avoid filler phrases, hedging language, and safe/bland observations. Every word should earn its place
+- VARY YOUR FORMAT: Never reuse the same sentence template across multiple replies. If you see a pattern in the recent posts (e.g., "[name] just discovered that..."), do NOT use that pattern. Use diverse structures: questions, observations, analogies, dry one-liners, hypotheticals, callbacks, etc.`;
 
 const CONTENT_OPTIONS_SCHEMA = {
   type: "object" as const,
