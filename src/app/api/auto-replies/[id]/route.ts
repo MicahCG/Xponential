@@ -119,6 +119,7 @@ export async function PUT(
         content: contentToPost,
         targetPostId: replyLog.targetTweetId,
         targetAuthor: replyLog.targetAuthor,
+        targetPostContent: replyLog.targetTweetText || undefined,
         videoUrl: replyLog.videoUrl,
         videoFormat: replyLog.videoUrl ? "mp4" : undefined,
         platformPostId: postedId,

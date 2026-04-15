@@ -166,6 +166,7 @@ model PostHistory {
   content          String    @db.Text
   targetPostId     String?   @map("target_post_id")
   targetAuthor     String?   @map("target_author")
+  targetPostContent String?  @map("target_post_content") @db.Text
   videoUrl         String?   @map("video_url")
   videoFormat      String?   @map("video_format")
   platformPostId   String?   @map("platform_post_id")

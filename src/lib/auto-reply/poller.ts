@@ -195,6 +195,7 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
                       content: replyContent,
                       targetPostId: tweet.id,
                       targetAuthor: account.accountHandle,
+                      targetPostContent: tweet.text,
                       platformPostId: posted.id,
                     },
                   });

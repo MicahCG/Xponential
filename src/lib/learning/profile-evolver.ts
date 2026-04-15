@@ -6,6 +6,8 @@ import type { FeedbackExample } from "@/lib/content/prompts";
 interface ScoredPost {
   content: string;
   postType: string;
+  targetAuthor: string | null;
+  targetPostContent: string | null;
   score: number;
   engagementRate: number;
   likes: number;
@@ -20,9 +22,10 @@ You will receive their best and worst performing posts from the past 30 days plu
 
 Your job is to:
 1. Identify the specific writing patterns, hooks, and structures that drove high engagement
-2. Identify what patterns consistently underperformed
-3. Write evolved reply instructions that incorporate these real-world findings
-4. Select 3-5 "do this" examples from their best posts and 2-3 "avoid this" patterns from their worst
+2. For replies where the original tweet is provided, analyze the reply-to-original relationship: what angle did the reply take (novel insight, humor, reframe, amplify, challenge)? Which types of original tweets were best to reply to?
+3. Identify what patterns consistently underperformed
+4. Write evolved reply instructions that incorporate these real-world findings, including guidance on which reply angles and tweet types to target
+5. Select 3-5 "do this" examples from their best posts and 2-3 "avoid this" patterns from their worst
 
 Rules:
 - The evolved instructions MUST preserve any explicit preferences from the current instructions (tone, language, topics to avoid, etc.)
@@ -60,12 +63,20 @@ function computeScore(engagement: Record<string, number>): {
 
 function formatPosts(posts: ScoredPost[]): string {
   return posts
-    .map(
-      (p, i) =>
+    .map((p, i) => {
+      const contextLine =
+        p.postType === "reply" && p.targetPostContent
+          ? `   Original tweet by @${p.targetAuthor ?? "unknown"}: "${p.targetPostContent}"\n`
+          : p.postType === "reply" && p.targetAuthor
+            ? `   Replying to @${p.targetAuthor}\n`
+            : "";
+      return (
         `${i + 1}. [${p.postType}] score: ${p.score.toFixed(0)}, engagement rate: ${p.engagementRate.toFixed(2)}%\n` +
+        contextLine +
         `   "${p.content}"\n` +
         `   (${p.likes} likes · ${p.retweets} RTs · ${p.replies} replies · ${p.impressions} impressions)`
-    )
+      );
+    })
     .join("\n\n");
 }
 
@@ -217,6 +228,8 @@ export async function evolveProfiles(
       userId: true,
       content: true,
       postType: true,
+      targetAuthor: true,
+      targetPostContent: true,
       engagement: true,
     },
   });
@@ -245,6 +258,8 @@ export async function evolveProfiles(
         return {
           content: p.content,
           postType: p.postType,
+          targetAuthor: p.targetAuthor,
+          targetPostContent: p.targetPostContent,
           score,
           engagementRate,
           likes: e.likes ?? 0,

@@ -8,6 +8,7 @@ interface PostWithMetrics {
   postType: PostType;
   postedAt: Date;
   targetAuthor: string | null;
+  targetPostContent: string | null;
   engagement: {
     likes: number;
     retweets: number;
@@ -44,7 +45,8 @@ Analyze these dimensions:
 - Length: shorter vs longer, where brevity won vs detail won
 - Tone: witty/ironic vs informative vs agreeable vs provocative, which resonated
 - Opening hook: what first lines drove more reads
-- Reply strategy: what angles get replies vs just likes
+- Reply strategy: what angles get replies vs just likes. When the original tweet is available, analyze how the reply related to the original — did it add a novel angle, agree and amplify, challenge, add humor, reframe? Which reply-to-original relationships drove the most engagement?
+- Reply context: which types of original tweets (announcements, opinions, questions, hot takes) were best to reply to, and what made the reply stand out in that context
 - Format: questions vs statements vs observations
 - Content type: original takes vs replies vs quotes, which drives more engagement for this user
 - Emoji use: did it help or hurt for this person
@@ -65,7 +67,13 @@ function formatPostsForAnalysis(posts: PostWithMetrics[]): string {
       const e = p.engagement;
       const score = computeEngagementScore(e).toFixed(1);
       const hour = p.postedAt.getHours();
-      return `Post ${i + 1} [${p.postType}] (posted ${hour}:00, score: ${score}):
+      const contextLine =
+        p.postType === "reply" && p.targetPostContent
+          ? `\nOriginal tweet by @${p.targetAuthor ?? "unknown"}: "${p.targetPostContent}"\nReply: `
+          : p.postType === "reply" && p.targetAuthor
+            ? `\nReplying to @${p.targetAuthor}: `
+            : "";
+      return `Post ${i + 1} [${p.postType}] (posted ${hour}:00, score: ${score}):${contextLine}
 "${p.content}"
 Metrics: ${e.likes} likes, ${e.retweets} retweets, ${e.replies} replies, ${e.impressions} impressions, ${e.bookmarks} bookmarks`;
     })
@@ -186,6 +194,7 @@ export async function runDailyLearning(): Promise<DailyLearningResult> {
       content: true,
       postedAt: true,
       targetAuthor: true,
+      targetPostContent: true,
       engagement: true,
     },
   });
@@ -208,6 +217,7 @@ export async function runDailyLearning(): Promise<DailyLearningResult> {
       postType: post.postType,
       postedAt: post.postedAt,
       targetAuthor: post.targetAuthor,
+      targetPostContent: post.targetPostContent,
       engagement: {
         likes: engagement.likes ?? 0,
         retweets: engagement.retweets ?? 0,

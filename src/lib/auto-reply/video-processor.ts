@@ -335,6 +335,7 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
           content: log.replyContent || "",
           targetPostId: log.targetTweetId,
           targetAuthor: log.targetAuthor,
+          targetPostContent: log.targetTweetText || undefined,
           videoUrl: log.videoUrl ?? undefined,
           videoFormat: "mp4",
           platformPostId: tweetId,
