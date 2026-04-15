@@ -177,12 +177,17 @@ export async function POST() {
       console.error("Twitter API error details:", details);
 
       if (error.code === 400) {
+        const detail = error.data?.detail ?? error.data?.title ?? "";
         return NextResponse.json(
           {
             error:
-              "Could not read your X profile data. Your X Developer App may need " +
-              "the Basic tier ($100/mo) to access tweet timelines. Check your " +
-              "access level at developer.x.com.",
+              "Could not read your X profile data. " +
+              (detail
+                ? `X API returned: ${detail}. `
+                : "") +
+              "This may mean your OAuth token is stale — try disconnecting and " +
+              "reconnecting your X account. If the problem persists, your X Developer " +
+              "App may need the Basic tier ($100/mo) to access tweet timelines.",
           },
           { status: 400 }
         );

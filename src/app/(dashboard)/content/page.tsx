@@ -76,7 +76,7 @@ interface LinkedInPost {
   status: string;
 }
 
-const MAX_ENABLED = 12;
+const MAX_ENABLED = 25;
 
 // ─── Formatting ──────────────────────────────────────────────
 

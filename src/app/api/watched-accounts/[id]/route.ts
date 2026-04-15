@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-const MAX_ENABLED_ACCOUNTS = 12;
+const MAX_ENABLED_ACCOUNTS = 25;
 
 export async function PUT(
   request: NextRequest,

@@ -74,7 +74,7 @@ const TECH_AI: PopularAccount[] = sortByFollowers([
   { handle: "kirawontmiss",name: "Kira",          followersCount: null,      category: "Tech & AI" },
 ]);
 
-const MAX_ACCOUNTS = 10;
+const MAX_ACCOUNTS = 25;
 
 // ─── Helpers ────────────────────────────────────────────────
 

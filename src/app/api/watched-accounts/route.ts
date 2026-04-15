@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getValidAccessToken, getUsersByUsernames } from "@/lib/platform/x-client";
 
-const MAX_ENABLED_ACCOUNTS = 10;
+const MAX_ENABLED_ACCOUNTS = 25;
 
 export async function GET() {
   const session = await auth();
