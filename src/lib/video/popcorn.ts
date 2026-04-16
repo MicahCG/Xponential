@@ -4,12 +4,25 @@
  * Uses the MCP (Movie Creation Protocol) API to generate short videos
  * for tweet replies. Supports creating movies, polling for status,
  * and retrieving final video URLs.
+ *
+ * ⛔ ALL POPCORN API INTEGRATIONS ARE HALTED.
+ * Every exported function will throw immediately — no requests will be sent.
+ * To re-enable, remove the POPCORN_HALTED flag and the guard function below.
  */
+
+const POPCORN_HALTED = true;
+
+function assertNotHalted(): void {
+  if (POPCORN_HALTED) {
+    throw new Error("Popcorn API integrations are halted. No requests will be sent.");
+  }
+}
 
 const POPCORN_API_URL = process.env.POPCORN_API_URL;
 const MCP_API_KEY = process.env.MCP_API_KEY;
 
 function getConfig() {
+  assertNotHalted();
   if (!POPCORN_API_URL) {
     throw new Error("POPCORN_API_URL is not configured. Add it to your environment variables.");
   }
@@ -75,6 +88,7 @@ export interface MovieUrl {
  * can download and pass to Twitter's media upload API.
  */
 export async function getDirectTsUrl(manifestUrl: string): Promise<string | null> {
+  assertNotHalted();
   try {
     const baseDir = manifestUrl.substring(0, manifestUrl.lastIndexOf("/"));
 

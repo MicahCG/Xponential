@@ -1,41 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { getMovieStatus, getMovieUrl } from "@/lib/video/popcorn";
+import { NextResponse } from "next/server";
 
-export async function GET(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const movieRootId = request.nextUrl.searchParams.get("movieRootId");
-  if (!movieRootId) {
-    return NextResponse.json({ error: "movieRootId is required" }, { status: 400 });
-  }
-
-  try {
-    const status = await getMovieStatus(movieRootId);
-    console.log(`[video/status] movieRootId=${movieRootId} status=${status.status}`);
-
-    if (status.status !== "ready") {
-      return NextResponse.json({ status: "processing" });
-    }
-
-    const movieUrl = await getMovieUrl(movieRootId);
-    const videoUrl = movieUrl.videoUrl ?? movieUrl.watermarkedVideoUrl;
-
-    if (!videoUrl) {
-      console.warn(`[video/status] movieRootId=${movieRootId} ready but no URL returned`);
-      return NextResponse.json({ status: "processing" });
-    }
-
-    console.log(`[video/status] movieRootId=${movieRootId} ready: ${videoUrl}`);
-    return NextResponse.json({ status: "ready", videoUrl });
-  } catch (error) {
-    console.error("[video/status] Popcorn error:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to check status" },
-      { status: 500 }
-    );
-  }
+// ⛔ Popcorn API integrations are halted — this route rejects all requests.
+export async function GET() {
+  return NextResponse.json(
+    { error: "Video status checks are currently disabled. Popcorn API integrations are halted." },
+    { status: 503 }
+  );
 }

@@ -1,54 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { createMovie } from "@/lib/video/popcorn";
+import { NextResponse } from "next/server";
 
-export async function POST(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const body = await request.json();
-  const prompt = (body.prompt as string)?.trim();
-
-  if (!prompt) {
-    return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { settings: true },
-  });
-
-  const settings = (user?.settings ?? {}) as Record<string, unknown>;
-  const popcornUserId = settings.popcornUserId as string | undefined;
-
-  if (!popcornUserId) {
-    return NextResponse.json(
-      { error: "Popcorn User ID not configured. Add it in Settings first." },
-      { status: 400 }
-    );
-  }
-
-  try {
-    console.log(`[video/create] User ${session.user.id} creating movie: "${prompt.slice(0, 80)}"`);
-
-    const movie = await createMovie({
-      prompt,
-      duration: "15",
-      orientation: "vertical",
-      quality: "medium",
-      userId: popcornUserId,
-    });
-
-    console.log(`[video/create] Movie created: movieRootId=${movie.movieRootId}`);
-    return NextResponse.json({ movieRootId: movie.movieRootId });
-  } catch (error) {
-    console.error("[video/create] Popcorn error:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to create video" },
-      { status: 500 }
-    );
-  }
+// ⛔ Popcorn API integrations are halted — this route rejects all requests.
+export async function POST() {
+  return NextResponse.json(
+    { error: "Video creation is currently disabled. Popcorn API integrations are halted." },
+    { status: 503 }
+  );
 }
