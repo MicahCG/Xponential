@@ -114,9 +114,11 @@ model PlatformConnection {
   tokenExpires   DateTime?        @map("token_expires")
   status         ConnectionStatus @default(active)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  personalityProfiles PersonalityProfile[]
+  watchedAccounts     WatchedAccount[]
 
-  @@unique([userId, platform])
+  @@unique([userId, platform, accountId])
   @@map("platform_connections")
 }
 
@@ -129,18 +131,20 @@ enum PersonalityMethod {
 }
 
 model PersonalityProfile {
-  id          String            @id @default(cuid())
-  userId      String            @map("user_id")
-  method      PersonalityMethod
-  rawInput    Json?             @map("raw_input")
-  profileData       Json              @map("profile_data")
-  replyInstructions  String?           @map("reply_instructions") @db.Text
-  feedbackExamples   Json?             @map("feedback_examples")
-  isActive           Boolean           @default(true) @map("is_active")
-  createdAt   DateTime          @default(now()) @map("created_at")
-  updatedAt   DateTime          @updatedAt @map("updated_at")
+  id                   String            @id @default(cuid())
+  userId               String            @map("user_id")
+  platformConnectionId String?           @map("platform_connection_id")
+  method               PersonalityMethod
+  rawInput             Json?             @map("raw_input")
+  profileData          Json              @map("profile_data")
+  replyInstructions    String?           @map("reply_instructions") @db.Text
+  feedbackExamples     Json?             @map("feedback_examples")
+  isActive             Boolean           @default(true) @map("is_active")
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platformConnection PlatformConnection? @relation(fields: [platformConnectionId], references: [id], onDelete: SetNull)
 
   @@map("personality_profiles")
 }
@@ -209,23 +213,25 @@ model ContentQueue {
 }
 
 model WatchedAccount {
-  id                 String   @id @default(cuid())
-  userId             String   @map("user_id")
-  platform           Platform
-  accountHandle      String   @map("account_handle")
-  accountId          String?  @map("account_id")
-  followersCount     Int?     @map("followers_count")
-  isRecommended      Boolean  @default(false) @map("is_recommended")
-  isEnabled          Boolean  @default(false) @map("is_enabled")
-  replyCount         Int      @default(0) @map("reply_count")
-  replyMode          String   @default("manual") @map("reply_mode")
-  replyType          String   @default("text") @map("reply_type")
-  lastCheckedTweetId String?  @map("last_checked_tweet_id")
-  category           String?
-  createdAt          DateTime @default(now()) @map("created_at")
+  id                   String   @id @default(cuid())
+  userId               String   @map("user_id")
+  platformConnectionId String?  @map("platform_connection_id")
+  platform             Platform
+  accountHandle        String   @map("account_handle")
+  accountId            String?  @map("account_id")
+  followersCount       Int?     @map("followers_count")
+  isRecommended        Boolean  @default(false) @map("is_recommended")
+  isEnabled            Boolean  @default(false) @map("is_enabled")
+  replyCount           Int      @default(0) @map("reply_count")
+  replyMode            String   @default("manual") @map("reply_mode")
+  replyType            String   @default("text") @map("reply_type")
+  lastCheckedTweetId   String?  @map("last_checked_tweet_id")
+  category             String?
+  createdAt            DateTime @default(now()) @map("created_at")
 
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  autoReplyLogs AutoReplyLog[]
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platformConnection PlatformConnection? @relation(fields: [platformConnectionId], references: [id], onDelete: SetNull)
+  autoReplyLogs      AutoReplyLog[]
 
   @@unique([userId, platform, accountHandle])
   @@map("watched_accounts")

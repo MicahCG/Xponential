@@ -15,13 +15,8 @@ export default async function CookieSetupPage() {
   const userId = session.user!.id as string;
 
   // Verify the user actually has an X connection
-  const connection = await prisma.platformConnection.findUnique({
-    where: {
-      userId_platform: {
-        userId,
-        platform: "x",
-      },
-    },
+  const connection = await prisma.platformConnection.findFirst({
+    where: { userId, platform: "x", status: "active" },
     select: { accountHandle: true },
   });
 

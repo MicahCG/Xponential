@@ -19,12 +19,14 @@ function getApifyToken(): string {
 /**
  * Gets the stored Twitter cookie for a user's X platform connection.
  */
-async function getTwitterCookie(userId: string): Promise<string> {
-  const connection = await prisma.platformConnection.findUnique({
-    where: {
-      userId_platform: { userId, platform: "x" },
-    },
-  });
+async function getTwitterCookie(userId: string, connectionId?: string): Promise<string> {
+  const connection = connectionId
+    ? await prisma.platformConnection.findFirst({
+        where: { id: connectionId, userId },
+      })
+    : await prisma.platformConnection.findFirst({
+        where: { userId, platform: "x", status: "active" },
+      });
 
   if (!connection) {
     throw new XPostError({
@@ -69,7 +71,8 @@ export async function startTweetViaApify(
   userId: string,
   text: string,
   replyToId?: string,
-  mediaUrl?: string
+  mediaUrl?: string,
+  connectionId?: string
 ): Promise<{ runId: string }> {
   if (!text || text.trim().length === 0) {
     throw new XPostError({ message: "Tweet text cannot be empty." });
@@ -80,7 +83,7 @@ export async function startTweetViaApify(
     });
   }
 
-  const cookie = await getTwitterCookie(userId);
+  const cookie = await getTwitterCookie(userId, connectionId);
   const token = getApifyToken();
 
   const input: Record<string, string> = {
@@ -210,7 +213,8 @@ export async function postTweetViaApify(
   userId: string,
   text: string,
   replyToId?: string,
-  mediaUrl?: string
+  mediaUrl?: string,
+  connectionId?: string
 ): Promise<{ id: string }> {
   // Pre-flight validation
   if (!text || text.trim().length === 0) {
@@ -225,7 +229,7 @@ export async function postTweetViaApify(
     });
   }
 
-  const cookie = await getTwitterCookie(userId);
+  const cookie = await getTwitterCookie(userId, connectionId);
   const token = getApifyToken();
 
   const input: Record<string, string> = {

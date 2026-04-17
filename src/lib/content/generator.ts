@@ -52,14 +52,19 @@ const CONTENT_OPTIONS_SCHEMA = {
 };
 
 async function getActiveProfile(
-  userId: string
+  userId: string,
+  connectionId?: string
 ): Promise<{
   personality: PersonalityProfile;
   replyInstructions: string | null;
   feedbackExamples: FeedbackExample[] | null;
 } | null> {
   const profile = await prisma.personalityProfile.findFirst({
-    where: { userId, isActive: true },
+    where: {
+      userId,
+      isActive: true,
+      ...(connectionId && { platformConnectionId: connectionId }),
+    },
     select: { profileData: true, replyInstructions: true, feedbackExamples: true },
   });
 
@@ -73,9 +78,10 @@ async function getActiveProfile(
 
 export async function generateContent(
   request: GenerateRequest,
-  userId: string
+  userId: string,
+  connectionId?: string
 ): Promise<GeneratedContent[]> {
-  const activeProfile = await getActiveProfile(userId);
+  const activeProfile = await getActiveProfile(userId, connectionId);
   if (!activeProfile) {
     throw new Error(
       "No personality profile found. Set up your personality first."

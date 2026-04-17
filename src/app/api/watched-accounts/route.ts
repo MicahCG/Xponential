@@ -5,14 +5,19 @@ import { getValidAccessToken, getUsersByUsernames } from "@/lib/platform/x-clien
 
 const MAX_ENABLED_ACCOUNTS = 25;
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const connectionId = request.nextUrl.searchParams.get("connectionId");
+
   let accounts = await prisma.watchedAccount.findMany({
-    where: { userId: session.user.id },
+    where: {
+      userId: session.user.id,
+      ...(connectionId && { platformConnectionId: connectionId }),
+    },
     orderBy: [{ isRecommended: "asc" }, { replyCount: "desc" }],
   });
 

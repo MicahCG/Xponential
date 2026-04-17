@@ -230,7 +230,7 @@ function VideoPostSection() {
   );
 }
 
-function XTab() {
+function XTab({ connectionId }: { connectionId?: string }) {
   const [accounts, setAccounts] = useState<WatchedAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
@@ -252,9 +252,10 @@ function XTab() {
 
   const fetchData = useCallback(async () => {
     try {
+      const connParam = connectionId ? `?connectionId=${connectionId}` : "";
       const [accountsRes, profileRes] = await Promise.all([
-        fetch("/api/watched-accounts"),
-        fetch("/api/personality/profile"),
+        fetch(`/api/watched-accounts${connParam}`),
+        fetch(`/api/personality/profile${connParam}`),
       ]);
 
       if (accountsRes.ok) {
@@ -301,7 +302,7 @@ function XTab() {
       const res = await fetch("/api/personality/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ replyInstructions }),
+        body: JSON.stringify({ replyInstructions, ...(connectionId && { connectionId }) }),
       });
       if (res.ok) setSavedInstructions(replyInstructions);
     } catch {
@@ -403,7 +404,7 @@ function XTab() {
     return (
       <div className="space-y-6 py-4">
         {onboardingStep === "analyze" && (
-          <AnalyzeStep onComplete={() => setOnboardingStep("select")} />
+          <AnalyzeStep connectionId={connectionId} onComplete={() => setOnboardingStep("select")} />
         )}
         {onboardingStep === "select" && (
           <AccountsStep onComplete={handleOnboardingComplete} />
@@ -563,19 +564,76 @@ function XTab() {
   );
 }
 
+// ─── Connection type ────────────────────────────────────────
+
+interface XConnection {
+  id: string;
+  accountHandle: string | null;
+  status: string;
+}
+
 // ─── Main Page ───────────────────────────────────────────────
 
 export default function AutoReplyPage() {
+  const [connections, setConnections] = useState<XConnection[]>([]);
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
+  const [loadingConnections, setLoadingConnections] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/connect/list")
+      .then((res) => res.json())
+      .then((data: XConnection[]) => {
+        const xConns = data.filter(
+          (c: XConnection) => c.status === "active"
+        );
+        setConnections(xConns);
+        if (xConns.length > 0 && !selectedConnectionId) {
+          setSelectedConnectionId(xConns[0].id);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingConnections(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (loadingConnections) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Auto-Replies</h1>
-        <p className="text-muted-foreground">
-          Manage your AI agent on X
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Auto-Replies</h1>
+          <p className="text-muted-foreground">
+            Manage your AI agent on X
+          </p>
+        </div>
+        {connections.length > 1 && (
+          <Select
+            value={selectedConnectionId ?? ""}
+            onValueChange={setSelectedConnectionId}
+          >
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Select account" />
+            </SelectTrigger>
+            <SelectContent>
+              {connections.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  @{c.accountHandle}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
-      <XTab />
+      {selectedConnectionId && (
+        <XTab key={selectedConnectionId} connectionId={selectedConnectionId} />
+      )}
     </div>
   );
 }

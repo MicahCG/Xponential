@@ -26,7 +26,7 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
     debug: [],
   };
 
-  // Get all enabled watched accounts grouped by user
+  // Get all enabled watched accounts grouped by platform connection
   const accounts = await prisma.watchedAccount.findMany({
     where: { isEnabled: true },
     include: {
@@ -36,26 +36,29 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
     },
   });
 
-  // Group by userId
-  const byUser = new Map<string, typeof accounts>();
+  // Group by platformConnectionId (fall back to userId for legacy rows)
+  const byConnection = new Map<string, typeof accounts>();
   for (const account of accounts) {
-    const userId = account.userId;
-    if (!byUser.has(userId)) byUser.set(userId, []);
-    byUser.get(userId)!.push(account);
+    const key = account.platformConnectionId ?? `user:${account.userId}`;
+    if (!byConnection.has(key)) byConnection.set(key, []);
+    byConnection.get(key)!.push(account);
   }
 
-  for (const [userId, userAccounts] of byUser) {
+  for (const [connectionKey, connectionAccounts] of byConnection) {
+    const userId = connectionAccounts[0].userId;
+    const connectionId = connectionKey.startsWith("user:") ? undefined : connectionKey;
+
     let accessToken: string;
     try {
-      accessToken = await getValidAccessToken(userId);
+      accessToken = await getValidAccessToken(userId, connectionId);
     } catch (err) {
       result.errors.push(
-        `User ${userId}: ${err instanceof Error ? err.message : "Token error"}`
+        `Connection ${connectionKey}: ${err instanceof Error ? err.message : "Token error"}`
       );
       continue;
     }
 
-    for (const account of userAccounts) {
+    for (const account of connectionAccounts) {
       result.accountsChecked++;
 
       // If accountId is missing, look it up and save it now
@@ -168,7 +171,8 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
                   targetAuthor: account.accountHandle,
                   count: 1,
                 },
-                userId
+                userId,
+                connectionId
               );
 
               if (!generated.length) continue;

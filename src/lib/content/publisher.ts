@@ -14,10 +14,8 @@ export async function publishQueueItem(queueItemId: string, userId: string) {
     throw new Error("Queue item must be approved before publishing");
   }
 
-  const connection = await prisma.platformConnection.findUnique({
-    where: {
-      userId_platform: { userId, platform: item.platform },
-    },
+  const connection = await prisma.platformConnection.findFirst({
+    where: { userId, platform: item.platform, status: "active" },
   });
 
   if (!connection || connection.status !== "active") {

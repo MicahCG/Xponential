@@ -42,9 +42,10 @@ export async function scrapeUserTweets(
 }
 
 export async function ingestFullProfile(
-  userId: string
+  userId: string,
+  connectionId?: string
 ): Promise<IngestedProfile> {
-  const accessToken = await getValidAccessToken(userId);
+  const accessToken = await getValidAccessToken(userId, connectionId);
 
   // Fetch full profile with bio and metrics
   const profile = await getUserProfileFull(accessToken);

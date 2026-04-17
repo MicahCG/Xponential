@@ -21,8 +21,8 @@ export async function POST() {
   };
 
   // Step 1: Check connection exists in DB
-  const connection = await prisma.platformConnection.findUnique({
-    where: { userId_platform: { userId, platform: "x" } },
+  const connection = await prisma.platformConnection.findFirst({
+    where: { userId, platform: "x", status: "active" },
     select: {
       id: true,
       status: true,

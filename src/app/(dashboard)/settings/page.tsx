@@ -4,16 +4,16 @@ import { TwitterCookieForm } from "@/components/settings/twitter-cookie-form";
 import { PopcornForm } from "@/components/settings/popcorn-form";
 import { PlatformCard } from "@/components/connections/platform-card";
 import type { PlatformConnectionInfo } from "@/types";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
 
 export default async function SettingsPage() {
   const session = await requireAuth();
 
-  const xConnection = await prisma.platformConnection.findUnique({
+  const xConnections = await prisma.platformConnection.findMany({
     where: {
-      userId_platform: {
-        userId: session.user!.id!,
-        platform: "x",
-      },
+      userId: session.user!.id!,
+      platform: "x",
     },
     select: {
       id: true,
@@ -23,18 +23,17 @@ export default async function SettingsPage() {
       status: true,
       twitterCookie: true,
     },
+    orderBy: { connectedAt: "asc" },
   });
 
-  const connectionInfo: PlatformConnectionInfo | undefined = xConnection
-    ? {
-        id: xConnection.id,
-        platform: xConnection.platform,
-        accountHandle: xConnection.accountHandle,
-        connectedAt: xConnection.connectedAt,
-        status: xConnection.status,
-        hasCookie: !!xConnection.twitterCookie,
-      }
-    : undefined;
+  const connectionInfos: PlatformConnectionInfo[] = xConnections.map((c) => ({
+    id: c.id,
+    platform: c.platform,
+    accountHandle: c.accountHandle,
+    connectedAt: c.connectedAt,
+    status: c.status,
+    hasCookie: !!c.twitterCookie,
+  }));
 
   return (
     <div className="space-y-6">
@@ -44,7 +43,18 @@ export default async function SettingsPage() {
           Manage your account and automation preferences
         </p>
       </div>
-      <PlatformCard platform="x" connection={connectionInfo} />
+      {connectionInfos.map((conn) => (
+        <PlatformCard key={conn.id} platform="x" connection={conn} />
+      ))}
+      {connectionInfos.length === 0 && (
+        <PlatformCard platform="x" />
+      )}
+      <Button asChild variant="outline" className="gap-2">
+        <a href="/api/connect/start/x">
+          <Plus className="h-4 w-4" />
+          Connect another X account
+        </a>
+      </Button>
       <TwitterCookieForm />
       <PopcornForm />
     </div>

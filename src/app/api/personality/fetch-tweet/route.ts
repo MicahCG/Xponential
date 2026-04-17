@@ -53,10 +53,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Get X connection to find platform user ID
-  const connection = await prisma.platformConnection.findUnique({
-    where: {
-      userId_platform: { userId: session.user.id, platform: "x" },
-    },
+  const connection = await prisma.platformConnection.findFirst({
+    where: { userId: session.user.id, platform: "x", status: "active" },
   });
 
   if (!connection || connection.status !== "active") {

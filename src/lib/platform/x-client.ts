@@ -46,14 +46,16 @@ export function createXClient(accessToken: string) {
  * Gets a valid access token for a user's X connection.
  * Automatically refreshes if the token is expired or about to expire.
  */
-export async function getValidAccessToken(userId: string): Promise<string> {
-  const connection = await prisma.platformConnection.findUnique({
-    where: {
-      userId_platform: { userId, platform: "x" },
-    },
-  });
+export async function getValidAccessToken(userId: string, connectionId?: string): Promise<string> {
+  const connection = connectionId
+    ? await prisma.platformConnection.findFirst({
+        where: { id: connectionId, userId, status: "active" },
+      })
+    : await prisma.platformConnection.findFirst({
+        where: { userId, platform: "x", status: "active" },
+      });
 
-  if (!connection || connection.status !== "active") {
+  if (!connection) {
     throw new Error("X account not connected. Connect your X account first.");
   }
 
@@ -68,7 +70,7 @@ export async function getValidAccessToken(userId: string): Promise<string> {
   }
 
   // Token is expired — refresh it
-  return forceRefreshToken(userId);
+  return forceRefreshToken(userId, connectionId);
 }
 
 /**
@@ -76,12 +78,14 @@ export async function getValidAccessToken(userId: string): Promise<string> {
  * Used when the stored token is rejected by X (401) even though
  * our DB thinks it's still valid.
  */
-export async function forceRefreshToken(userId: string): Promise<string> {
-  const connection = await prisma.platformConnection.findUnique({
-    where: {
-      userId_platform: { userId, platform: "x" },
-    },
-  });
+export async function forceRefreshToken(userId: string, connectionId?: string): Promise<string> {
+  const connection = connectionId
+    ? await prisma.platformConnection.findFirst({
+        where: { id: connectionId, userId },
+      })
+    : await prisma.platformConnection.findFirst({
+        where: { userId, platform: "x" },
+      });
 
   if (!connection) {
     throw new Error("X account not connected. Connect your X account first.");

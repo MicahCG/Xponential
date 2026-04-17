@@ -20,7 +20,7 @@ const PROGRESS_MESSAGES = [
   "Almost done...",
 ];
 
-export function AnalyzeStep({ onComplete }: { onComplete: () => void }) {
+export function AnalyzeStep({ onComplete, connectionId }: { onComplete: () => void; connectionId?: string }) {
   const [progressIdx, setProgressIdx] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(true);
@@ -41,6 +41,7 @@ export function AnalyzeStep({ onComplete }: { onComplete: () => void }) {
       const res = await fetch("/api/personality/ingest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(connectionId ? { connectionId } : {}),
       });
 
       const data = await res.json();

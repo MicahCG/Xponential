@@ -3,20 +3,27 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { updateProfileSchema } from "@/lib/validators";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const connectionId = request.nextUrl.searchParams.get("connectionId");
+
   const profile = await prisma.personalityProfile.findFirst({
-    where: { userId: session.user.id, isActive: true },
+    where: {
+      userId: session.user.id,
+      isActive: true,
+      ...(connectionId && { platformConnectionId: connectionId }),
+    },
     select: {
       id: true,
       method: true,
       profileData: true,
       replyInstructions: true,
       feedbackExamples: true,
+      platformConnectionId: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -36,7 +43,9 @@ export async function PUT(request: NextRequest) {
   }
 
   const body = await request.json();
-  const parsed = updateProfileSchema.safeParse(body);
+  const connId = typeof body.connectionId === "string" ? body.connectionId : undefined;
+  const { connectionId: _, ...rest } = body;
+  const parsed = updateProfileSchema.safeParse(rest);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.flatten() },
@@ -45,7 +54,11 @@ export async function PUT(request: NextRequest) {
   }
 
   const existing = await prisma.personalityProfile.findFirst({
-    where: { userId: session.user.id, isActive: true },
+    where: {
+      userId: session.user.id,
+      isActive: true,
+      ...(connId ? { platformConnectionId: connId } : {}),
+    },
   });
 
   if (!existing) {

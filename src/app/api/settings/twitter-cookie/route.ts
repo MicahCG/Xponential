@@ -12,10 +12,8 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const connection = await prisma.platformConnection.findUnique({
-    where: {
-      userId_platform: { userId: session.user.id, platform: "x" },
-    },
+  const connection = await prisma.platformConnection.findFirst({
+    where: { userId: session.user.id, platform: "x", status: "active" },
     select: { twitterCookie: true },
   });
 
@@ -60,10 +58,8 @@ export async function PUT(request: NextRequest) {
   }
 
   // Find the user's X platform connection
-  const connection = await prisma.platformConnection.findUnique({
-    where: {
-      userId_platform: { userId: session.user.id, platform: "x" },
-    },
+  const connection = await prisma.platformConnection.findFirst({
+    where: { userId: session.user.id, platform: "x", status: "active" },
   });
 
   if (!connection) {
@@ -95,10 +91,8 @@ export async function DELETE() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const connection = await prisma.platformConnection.findUnique({
-    where: {
-      userId_platform: { userId: session.user.id, platform: "x" },
-    },
+  const connection = await prisma.platformConnection.findFirst({
+    where: { userId: session.user.id, platform: "x", status: "active" },
   });
 
   if (!connection) {

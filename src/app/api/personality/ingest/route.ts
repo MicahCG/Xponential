@@ -7,7 +7,7 @@ import { getAccountRecommendations } from "@/lib/personality/recommender";
 import { getValidAccessToken, getUsersByUsernames } from "@/lib/platform/x-client";
 import { ApiResponseError } from "twitter-api-v2";
 
-export async function POST() {
+export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -15,9 +15,18 @@ export async function POST() {
 
   const userId = session.user.id;
 
+  // Accept optional connectionId to ingest a specific connected account
+  let connectionId: string | undefined;
+  try {
+    const body = await request.json().catch(() => ({}));
+    connectionId = (body as Record<string, unknown>).connectionId as string | undefined;
+  } catch {
+    // No body — use default connection
+  }
+
   try {
     // Step 1: Ingest full profile data from X
-    const ingestedData = await ingestFullProfile(userId);
+    const ingestedData = await ingestFullProfile(userId, connectionId);
 
     const totalContent =
       ingestedData.originalTweets.length + ingestedData.replies.length;
@@ -37,20 +46,25 @@ export async function POST() {
       ingestedData,
     });
 
-    // Step 3: Carry over feedback, deactivate existing profiles, save new one
+    // Step 3: Carry over feedback, deactivate existing profiles for this connection, save new one
+    const deactivateWhere = connectionId
+      ? { userId, platformConnectionId: connectionId, isActive: true }
+      : { userId, isActive: true };
+
     const existing = await prisma.personalityProfile.findFirst({
-      where: { userId: userId, isActive: true },
+      where: deactivateWhere,
       select: { replyInstructions: true, feedbackExamples: true },
     });
 
     await prisma.personalityProfile.updateMany({
-      where: { userId: userId, isActive: true },
+      where: deactivateWhere,
       data: { isActive: false },
     });
 
     const saved = await prisma.personalityProfile.create({
       data: {
         userId: userId,
+        platformConnectionId: connectionId ?? null,
         method: "ingest",
         rawInput: JSON.parse(
           JSON.stringify({
@@ -77,7 +91,7 @@ export async function POST() {
         ...engagedAccounts.map((a) => a.username),
         ...recommendedAccounts.map((a) => a.username),
       ];
-      const accessToken = await getValidAccessToken(userId);
+      const accessToken = await getValidAccessToken(userId, connectionId);
       const userData = await getUsersByUsernames(accessToken, allHandles);
       const userMap = new Map(userData.map((u) => [u.username.toLowerCase(), u]));
 
@@ -103,6 +117,7 @@ export async function POST() {
     const allAccounts = [
       ...engagedAccounts.map((a) => ({
         userId: userId,
+        platformConnectionId: connectionId ?? null,
         platform: "x" as const,
         accountHandle: a.username,
         accountId: (a as typeof a & { accountId?: string }).accountId ?? null,
@@ -114,6 +129,7 @@ export async function POST() {
       })),
       ...recommendedAccounts.map((a) => ({
         userId: userId,
+        platformConnectionId: connectionId ?? null,
         platform: "x" as const,
         accountHandle: a.username,
         accountId: (a as typeof a & { accountId?: string }).accountId ?? null,

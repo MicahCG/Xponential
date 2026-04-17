@@ -21,13 +21,8 @@ export async function DELETE(
     );
   }
 
-  const connection = await prisma.platformConnection.findUnique({
-    where: {
-      userId_platform: {
-        userId: session.user.id,
-        platform,
-      },
-    },
+  const connection = await prisma.platformConnection.findFirst({
+    where: { userId: session.user.id, platform, status: "active" },
   });
 
   if (!connection) {

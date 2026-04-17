@@ -65,34 +65,44 @@ export async function GET(
 
       const profile = await getXProfile(tokens.access_token);
 
-      await prisma.platformConnection.upsert({
-        where: {
-          userId_platform: {
-            userId,
-            platform: "x",
-          },
-        },
-        update: {
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token,
-          accountHandle: profile.username,
-          accountId: profile.id,
-          tokenExpires: new Date(Date.now() + tokens.expires_in * 1000),
-          status: "active",
-        },
-        create: {
-          userId,
-          platform: "x",
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token,
-          accountHandle: profile.username,
-          accountId: profile.id,
-          tokenExpires: new Date(Date.now() + tokens.expires_in * 1000),
-        },
+      // Check if this X account is already connected (reconnection vs new account)
+      const existing = await prisma.platformConnection.findFirst({
+        where: { userId, platform: "x", accountId: profile.id },
       });
 
+      let connectionId: string;
+
+      if (existing) {
+        // Reconnecting same account — update tokens
+        await prisma.platformConnection.update({
+          where: { id: existing.id },
+          data: {
+            accessToken: tokens.access_token,
+            refreshToken: tokens.refresh_token,
+            accountHandle: profile.username,
+            tokenExpires: new Date(Date.now() + tokens.expires_in * 1000),
+            status: "active",
+          },
+        });
+        connectionId = existing.id;
+      } else {
+        // New account — create a new connection
+        const created = await prisma.platformConnection.create({
+          data: {
+            userId,
+            platform: "x",
+            accessToken: tokens.access_token,
+            refreshToken: tokens.refresh_token,
+            accountHandle: profile.username,
+            accountId: profile.id,
+            tokenExpires: new Date(Date.now() + tokens.expires_in * 1000),
+          },
+        });
+        connectionId = created.id;
+      }
+
       // Redirect to cookie setup page so users complete step 2
-      const xRedirect = returnTo ?? "/connections/x/cookie-setup";
+      const xRedirect = returnTo ?? `/connections/x/cookie-setup?connectionId=${connectionId}`;
       return NextResponse.redirect(
         new URL(xRedirect, request.url)
       );
