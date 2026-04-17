@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Loader2, Brain, RefreshCw } from "lucide-react";
+import { Loader2, Brain, RefreshCw, Twitter } from "lucide-react";
 
 const PROGRESS_MESSAGES = [
   "Fetching your tweets and replies...",
@@ -84,16 +84,24 @@ export function AnalyzeStep({ onComplete, connectionId }: { onComplete: () => vo
             <div className="rounded-md bg-destructive/10 p-3 text-center text-sm text-destructive">
               {error}
             </div>
-            <Button
-              onClick={() => {
-                hasStarted.current = false;
-                runIngest();
-              }}
-              variant="outline"
-            >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Retry
-            </Button>
+            <div className="flex gap-3">
+              <Button
+                onClick={() => {
+                  hasStarted.current = false;
+                  runIngest();
+                }}
+                variant="outline"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Retry
+              </Button>
+              <Button asChild variant="default">
+                <a href="/api/connect/start/x?returnTo=/setup">
+                  <Twitter className="mr-2 h-4 w-4" />
+                  Reconnect X
+                </a>
+              </Button>
+            </div>
           </>
         ) : analyzing ? (
           <div className="flex flex-col items-center gap-3 py-4">
