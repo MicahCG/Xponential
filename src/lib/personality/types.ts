@@ -16,7 +16,6 @@ export interface PersonalityProfile {
   reply_patterns?: string[];
   platform_overrides: {
     x?: Partial<Omit<PersonalityProfile, "platform_overrides">>;
-    linkedin?: Partial<Omit<PersonalityProfile, "platform_overrides">>;
   };
 }
 
@@ -119,10 +118,6 @@ export const PERSONALITY_PROFILE_SCHEMA = {
         x: {
           type: "object" as const,
           description: "X-specific tone adjustments",
-        },
-        linkedin: {
-          type: "object" as const,
-          description: "LinkedIn-specific tone adjustments",
         },
       },
       description: "Platform-specific overrides",

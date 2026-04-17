@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import * as xOAuth from "@/lib/oauth/x";
-import * as linkedinOAuth from "@/lib/oauth/linkedin";
 
 export async function GET(
   request: NextRequest,
@@ -40,36 +39,6 @@ export async function GET(
       redirectUri,
       state,
       codeChallenge,
-    });
-
-    return NextResponse.redirect(authUrl);
-  }
-
-  if (platform === "linkedin") {
-    const clientId = process.env.LINKEDIN_CLIENT_ID;
-    const redirectUri = process.env.LINKEDIN_CALLBACK_URL;
-
-    if (!clientId || !redirectUri) {
-      return NextResponse.redirect(
-        new URL("/connections?error=linkedin_not_configured", request.url)
-      );
-    }
-
-    const state = linkedinOAuth.generateState();
-
-    await prisma.oAuthState.create({
-      data: {
-        state,
-        userId: session.user.id,
-        platform: "linkedin",
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      },
-    });
-
-    const authUrl = linkedinOAuth.buildAuthUrl({
-      clientId,
-      redirectUri,
-      state,
     });
 
     return NextResponse.redirect(authUrl);

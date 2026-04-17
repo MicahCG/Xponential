@@ -41,7 +41,7 @@ interface AutoReplyLog {
 
 // ─── Reply Feed (fetches + renders the full list) ───────────
 
-export function ReplyFeed({ platform }: { platform?: "x" | "linkedin" } = {}) {
+export function ReplyFeed({ platform }: { platform?: "x" } = {}) {
   const [replies, setReplies] = useState<AutoReplyLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [approveError, setApproveError] = useState<string | null>(null);

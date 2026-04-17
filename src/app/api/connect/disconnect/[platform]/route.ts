@@ -14,7 +14,7 @@ export async function DELETE(
 
   const { platform } = await params;
 
-  if (platform !== "x" && platform !== "linkedin") {
+  if (platform !== "x") {
     return NextResponse.json(
       { error: "Unsupported platform" },
       { status: 400 }

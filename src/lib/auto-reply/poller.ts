@@ -112,6 +112,20 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
         const tweetsToReply = [tweets[0]];
         for (const tweet of tweetsToReply) {
           try {
+            // Dedup: skip if we already have a log entry for this tweet + account
+            const existing = await prisma.autoReplyLog.findFirst({
+              where: {
+                watchedAccountId: account.id,
+                targetTweetId: tweet.id,
+              },
+              select: { id: true },
+            });
+            if (existing) {
+              result.debug.push(
+                `@${account.accountHandle}: Skipping tweet ${tweet.id} — already has a reply log`
+              );
+              continue;
+            }
             if (account.replyType === "video") {
               // Guard: skip video queueing if Popcorn isn't configured
               const popcornConfigured = !!(process.env.POPCORN_API_URL && process.env.MCP_API_KEY);

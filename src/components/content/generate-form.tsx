@@ -29,7 +29,7 @@ export function GenerateForm({
 }: {
   onGenerated: (result: GenerateResult) => void;
 }) {
-  const [platform, setPlatform] = useState<"x" | "linkedin">("x");
+  const [platform] = useState<"x">("x");
   const [postType, setPostType] = useState<"reply" | "quote" | "original">(
     "reply"
   );
@@ -85,21 +85,6 @@ export function GenerateForm({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Platform</Label>
-            <Select
-              value={platform}
-              onValueChange={(v) => setPlatform(v as "x" | "linkedin")}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="x">X (Twitter)</SelectItem>
-                <SelectItem value="linkedin">LinkedIn</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           <div className="space-y-2">
             <Label>Post Type</Label>
             <Select

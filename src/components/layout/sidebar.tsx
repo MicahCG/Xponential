@@ -7,7 +7,6 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
-  Link2,
   Brain,
   MessageSquareReply,
   Settings,
@@ -19,9 +18,8 @@ import {
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/connections", label: "Connections", icon: Link2 },
-  { href: "/personality", label: "Personality", icon: Brain },
   { href: "/content", label: "Auto-Replies", icon: MessageSquareReply },
+  { href: "/personality", label: "Personality", icon: Brain },
   { href: "/video", label: "Video Studio", icon: Clapperboard },
   { href: "/analytics", label: "Analytics", icon: BarChart2 },
   { href: "/settings", label: "Settings", icon: Settings },

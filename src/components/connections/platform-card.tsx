@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Twitter, Linkedin, Loader2, Unlink, AlertTriangle } from "lucide-react";
+import { Twitter, Loader2, Unlink, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import type { PlatformConnectionInfo } from "@/types";
 import { formatDistanceToNow } from "date-fns";
@@ -22,18 +22,13 @@ const platformConfig = {
     icon: Twitter,
     description: "Post tweets and replies on your behalf",
   },
-  linkedin: {
-    name: "LinkedIn",
-    icon: Linkedin,
-    description: "Share posts and engage on LinkedIn",
-  },
 } as const;
 
 export function PlatformCard({
   platform,
   connection,
 }: {
-  platform: "x" | "linkedin";
+  platform: "x";
   connection?: PlatformConnectionInfo;
 }) {
   const [disconnecting, setDisconnecting] = useState(false);

@@ -27,10 +27,6 @@
       "schedule": "0 12 * * *"
     },
     {
-      "path": "/api/cron/linkedin-auto-reply",
-      "schedule": "*/15 * * * *"
-    },
-    {
       "path": "/api/cron/process-video-posts",
       "schedule": "*/3 * * * *"
     },

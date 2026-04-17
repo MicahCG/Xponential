@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { postTweetWithRetry } from "@/lib/platform/x-client";
-import { createLinkedInPost } from "@/lib/platform/linkedin-client";
 
 export async function publishQueueItem(queueItemId: string, userId: string) {
   const item = await prisma.contentQueue.findFirst({
@@ -35,14 +34,6 @@ export async function publishQueueItem(queueItemId: string, userId: string) {
       item.content,
       item.targetPostId ?? undefined,
       item.videoUrl ?? undefined
-    );
-    platformPostId = result.id;
-  } else if (item.platform === "linkedin") {
-    const authorUrn = `urn:li:person:${connection.accountId}`;
-    const result = await createLinkedInPost(
-      connection.accessToken,
-      authorUrn,
-      item.content
     );
     platformPostId = result.id;
   }

@@ -42,7 +42,6 @@ export const updateProfileSchema = z.object({
   cultural_references: z.string().optional(),
   platform_overrides: z.object({
     x: z.record(z.string(), z.unknown()).optional(),
-    linkedin: z.record(z.string(), z.unknown()).optional(),
   }).optional(),
   replyInstructions: z.string().max(2000).nullable().optional(),
   feedbackExamples: z.array(z.object({
@@ -55,7 +54,7 @@ export const updateProfileSchema = z.object({
 
 // Content validators
 export const generateContentSchema = z.object({
-  platform: z.enum(["x", "linkedin"]),
+  platform: z.enum(["x"]),
   postType: z.enum(["reply", "quote", "original"]),
   targetPostUrl: z.string().url().optional(),
   targetPostContent: z.string().max(10000).optional(),

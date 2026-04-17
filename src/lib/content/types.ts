@@ -1,5 +1,5 @@
 export interface GenerateRequest {
-  platform: "x" | "linkedin";
+  platform: "x";
   postType: "reply" | "quote" | "original";
   targetPostUrl?: string;
   targetPostContent?: string;
@@ -12,7 +12,7 @@ export interface GenerateRequest {
 export interface GeneratedContent {
   content: string;
   reasoning: string;
-  platform: "x" | "linkedin";
+  platform: "x";
   postType: "reply" | "quote" | "original";
   characterCount: number;
 }

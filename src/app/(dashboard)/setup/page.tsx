@@ -183,8 +183,8 @@ export default function SetupPage() {
           if (enabled?.length > 0 && profileRes.ok) {
             const profile = await profileRes.json().catch(() => null);
             if (profile?.id) {
-              // All setup complete, go to dashboard
-              router.replace("/dashboard");
+              // All setup complete, go to auto-replies
+              router.replace("/content");
               return;
             }
           }
@@ -273,7 +273,7 @@ export default function SetupPage() {
         {currentStep === 4 && (
           <CookieStep
             onComplete={() => {
-              router.push("/dashboard");
+              router.push("/content");
             }}
           />
         )}

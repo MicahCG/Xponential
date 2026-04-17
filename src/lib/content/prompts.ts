@@ -1,5 +1,5 @@
 import type { PersonalityProfile } from "@/lib/personality/types";
-import { X_CHAR_LIMIT, LINKEDIN_CHAR_LIMIT } from "@/lib/constants";
+import { X_CHAR_LIMIT } from "@/lib/constants";
 
 export interface FeedbackExample {
   type: "do" | "dont";
@@ -60,20 +60,16 @@ export function buildReplyPrompt(params: {
   targetPost: string;
   targetAuthor: string;
   recentPosts: string[];
-  platform: "x" | "linkedin";
+  platform: "x";
   count: number;
   replyInstructions?: string | null;
   feedbackExamples?: FeedbackExample[] | null;
   learnings?: string | null;
 }) {
-  const charLimit =
-    params.platform === "x" ? X_CHAR_LIMIT : LINKEDIN_CHAR_LIMIT;
-  const platformProfile =
-    params.platform === "x"
-      ? params.personality.platform_overrides?.x
-      : params.personality.platform_overrides?.linkedin;
+  const charLimit = X_CHAR_LIMIT;
+  const platformProfile = params.personality.platform_overrides?.x;
 
-  return `You are ghostwriting a ${params.platform === "x" ? "tweet" : "LinkedIn"} reply for someone with this voice:
+  return `You are ghostwriting a tweet reply for someone with this voice:
 
 ${serializeProfile(params.personality)}
 ${platformProfile ? `\nPlatform-specific adjustments: ${JSON.stringify(platformProfile)}` : ""}
@@ -103,17 +99,16 @@ export function buildOriginalPostPrompt(params: {
   personality: PersonalityProfile;
   topic: string;
   recentPosts: string[];
-  platform: "x" | "linkedin";
+  platform: "x";
   count: number;
   additionalContext?: string;
   replyInstructions?: string | null;
   feedbackExamples?: FeedbackExample[] | null;
   learnings?: string | null;
 }) {
-  const charLimit =
-    params.platform === "x" ? X_CHAR_LIMIT : LINKEDIN_CHAR_LIMIT;
+  const charLimit = X_CHAR_LIMIT;
 
-  return `You are ghostwriting an original ${params.platform === "x" ? "tweet" : "LinkedIn post"} for someone with this voice:
+  return `You are ghostwriting an original tweet for someone with this voice:
 
 ${serializeProfile(params.personality)}
 ${instructionsBlock(params.replyInstructions)}${examplesBlock(params.feedbackExamples)}${learningsBlock(params.learnings)}
@@ -141,16 +136,15 @@ export function buildQuotePrompt(params: {
   targetPost: string;
   targetAuthor: string;
   recentPosts: string[];
-  platform: "x" | "linkedin";
+  platform: "x";
   count: number;
   replyInstructions?: string | null;
   feedbackExamples?: FeedbackExample[] | null;
   learnings?: string | null;
 }) {
-  const charLimit =
-    params.platform === "x" ? X_CHAR_LIMIT : LINKEDIN_CHAR_LIMIT;
+  const charLimit = X_CHAR_LIMIT;
 
-  return `You are ghostwriting a quote-${params.platform === "x" ? "tweet" : "post"} commentary for someone with this voice:
+  return `You are ghostwriting a quote-tweet commentary for someone with this voice:
 
 ${serializeProfile(params.personality)}
 ${instructionsBlock(params.replyInstructions)}${examplesBlock(params.feedbackExamples)}${learningsBlock(params.learnings)}

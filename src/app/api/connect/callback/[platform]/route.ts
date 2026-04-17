@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import * as xOAuth from "@/lib/oauth/x";
-import * as linkedinOAuth from "@/lib/oauth/linkedin";
 import { getUserProfile as getXProfile } from "@/lib/platform/x-client";
 
 export async function GET(
@@ -96,54 +95,6 @@ export async function GET(
       const xRedirect = returnTo ?? "/connections/x/cookie-setup";
       return NextResponse.redirect(
         new URL(xRedirect, request.url)
-      );
-    }
-
-    if (platform === "linkedin") {
-      if (oauthState.platform !== "linkedin") {
-        return NextResponse.redirect(
-          new URL("/connections?error=invalid_state", request.url)
-        );
-      }
-
-      const tokens = await linkedinOAuth.exchangeCode({
-        code,
-        clientId: process.env.LINKEDIN_CLIENT_ID!,
-        clientSecret: process.env.LINKEDIN_CLIENT_SECRET!,
-        redirectUri: process.env.LINKEDIN_CALLBACK_URL!,
-      });
-
-      const profile = await linkedinOAuth.getUserProfile(tokens.access_token);
-
-      await prisma.platformConnection.upsert({
-        where: {
-          userId_platform: {
-            userId,
-            platform: "linkedin",
-          },
-        },
-        update: {
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token ?? null,
-          accountHandle: profile.name,
-          accountId: profile.sub,
-          tokenExpires: new Date(Date.now() + tokens.expires_in * 1000),
-          status: "active",
-        },
-        create: {
-          userId,
-          platform: "linkedin",
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token ?? null,
-          accountHandle: profile.name,
-          accountId: profile.sub,
-          tokenExpires: new Date(Date.now() + tokens.expires_in * 1000),
-        },
-      });
-
-      const linkedinRedirect = returnTo ?? "/connections";
-      return NextResponse.redirect(
-        new URL(`${linkedinRedirect}?connected=linkedin`, request.url)
       );
     }
 

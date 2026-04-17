@@ -13,7 +13,6 @@ export interface PersonalityProfile {
   cultural_references: string;
   platform_overrides: {
     x?: Partial<Omit<PersonalityProfile, "platform_overrides">>;
-    linkedin?: Partial<Omit<PersonalityProfile, "platform_overrides">>;
   };
 }
 

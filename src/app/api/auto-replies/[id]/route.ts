@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { postTweetWithRetry, XPostError } from "@/lib/platform/x-client";
-import { postLinkedInComment } from "@/lib/platform/linkedin-client";
 import { compressVideo } from "@/lib/video/compress";
 
 export async function PUT(
@@ -68,38 +67,18 @@ export async function PUT(
   try {
     let postedId: string;
 
-    if (platform === "linkedin") {
-      const connection = await prisma.platformConnection.findUnique({
-        where: { userId_platform: { userId: session.user.id, platform: "linkedin" } },
-      });
-      if (!connection || connection.status !== "active") {
-        return NextResponse.json(
-          { error: "LinkedIn account not connected", source: "linkedin", errorType: "auth", retryable: true },
-          { status: 401 }
-        );
-      }
-      const authorUrn = `urn:li:person:${connection.accountId}`;
-      const result = await postLinkedInComment(
-        connection.accessToken,
-        authorUrn,
-        replyLog.targetTweetId,
-        contentToPost
-      );
-      postedId = result.id;
-    } else {
-      // Compress video through Cloudinary before posting (GCS files are ~6.5MB, over the limit)
-      let mediaUrl = replyLog.videoUrl ?? undefined;
-      if (mediaUrl) {
-        mediaUrl = await compressVideo(mediaUrl);
-      }
-      const result = await postTweetWithRetry(
-        session.user.id,
-        contentToPost,
-        replyLog.targetTweetId,
-        mediaUrl
-      );
-      postedId = result.id;
+    // Compress video through Cloudinary before posting (GCS files are ~6.5MB, over the limit)
+    let mediaUrl = replyLog.videoUrl ?? undefined;
+    if (mediaUrl) {
+      mediaUrl = await compressVideo(mediaUrl);
     }
+    const result = await postTweetWithRetry(
+      session.user.id,
+      contentToPost,
+      replyLog.targetTweetId,
+      mediaUrl
+    );
+    postedId = result.id;
 
     await prisma.autoReplyLog.update({
       where: { id },

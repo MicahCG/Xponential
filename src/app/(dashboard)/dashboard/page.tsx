@@ -60,10 +60,10 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Link href="/connections" className="h-full">
+        <Link href="/settings" className="h-full">
           <Card className="h-full transition-colors hover:border-primary/50">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Connections</CardTitle>
+              <CardTitle className="text-sm font-medium">Connection</CardTitle>
               <Link2 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -81,7 +81,7 @@ export default async function DashboardPage() {
               <CardDescription className="mt-2">
                 {activeConnections.length > 0
                   ? `${activeConnections.length} platform(s) connected`
-                  : "Connect X and LinkedIn to start posting"}
+                  : "Connect X to start posting"}
               </CardDescription>
             </CardContent>
           </Card>

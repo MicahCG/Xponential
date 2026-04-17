@@ -12,7 +12,7 @@ export default function PrivacyPolicyPage() {
         <h2 className="mb-3 text-lg font-semibold text-gray-900">1. Introduction</h2>
         <p>
           Xponential (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;) operates a social media automation
-          platform that helps users schedule and publish content on X (Twitter) and LinkedIn.
+          platform that helps users schedule and publish content on X (Twitter).
           This Privacy Policy explains how we collect, use, and protect your information when
           you use our service at xponential-two.vercel.app.
         </p>
@@ -25,7 +25,7 @@ export default function PrivacyPolicyPage() {
             <strong>Account information:</strong> Email address and name provided during sign-up.
           </li>
           <li>
-            <strong>Social media tokens:</strong> OAuth access tokens for X and LinkedIn, used
+            <strong>Social media tokens:</strong> OAuth access tokens for X, used
             solely to post content on your behalf.
           </li>
           <li>
@@ -57,9 +57,8 @@ export default function PrivacyPolicyPage() {
         <h2 className="mb-3 text-lg font-semibold text-gray-900">4. Third-Party Services</h2>
         <p className="mb-2">We use the following third-party services to operate the platform:</p>
         <ul className="list-disc space-y-2 pl-5">
-          <li><strong>LinkedIn API</strong> – to post content to your LinkedIn profile.</li>
           <li><strong>X (Twitter) API</strong> – to post content to your X account.</li>
-          <li><strong>OpenAI</strong> – to generate content suggestions.</li>
+          <li><strong>Anthropic (Claude)</strong> – to generate content suggestions.</li>
           <li><strong>Supabase</strong> – for database and storage.</li>
           <li><strong>Vercel</strong> – for hosting and deployment.</li>
         </ul>
@@ -92,7 +91,7 @@ export default function PrivacyPolicyPage() {
         <ul className="list-disc space-y-2 pl-5">
           <li>Access the personal data we hold about you.</li>
           <li>Request correction or deletion of your data.</li>
-          <li>Revoke OAuth access at any time via your LinkedIn or X account settings.</li>
+          <li>Revoke OAuth access at any time via your X account settings.</li>
           <li>Opt out of data processing where applicable.</li>
         </ul>
       </section>

@@ -20,7 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Loader2,
   Plus,
@@ -30,10 +29,6 @@ import {
   Sparkles,
   TrendingUp,
   Save,
-  Twitter,
-  Linkedin,
-  Send,
-  Clock,
   Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -68,14 +63,6 @@ interface VideoPost {
   platformPostId: string | null;
 }
 
-interface LinkedInPost {
-  id: string;
-  content: string;
-  postedAt: string;
-  platformPostId: string | null;
-  status: string;
-}
-
 const MAX_ENABLED = 25;
 
 // ─── Formatting ──────────────────────────────────────────────
@@ -85,326 +72,6 @@ function formatFollowers(n: number | null): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M followers`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K followers`;
   return `${n} followers`;
-}
-
-// ─── Types ──────────────────────────────────────────────────
-
-interface LinkedInProfile {
-  id: string;
-  accountHandle: string; // full profile URL
-  isEnabled: boolean;
-  replyMode: string;
-  replyCount: number;
-}
-
-// ─── LinkedIn Tab ────────────────────────────────────────────
-
-function LinkedInTab() {
-  const [postText, setPostText] = useState("");
-  const [posting, setPosting] = useState(false);
-  const [postError, setPostError] = useState<string | null>(null);
-  const [postSuccess, setPostSuccess] = useState(false);
-  const [history, setHistory] = useState<LinkedInPost[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(true);
-  const [connected, setConnected] = useState<boolean | null>(null);
-
-  const [profiles, setProfiles] = useState<LinkedInProfile[]>([]);
-  const [newProfileUrl, setNewProfileUrl] = useState("");
-  const [addingProfile, setAddingProfile] = useState(false);
-  const [addProfileError, setAddProfileError] = useState<string | null>(null);
-
-  const fetchData = useCallback(async () => {
-    try {
-      const [historyRes, connectRes, profilesRes] = await Promise.all([
-        fetch("/api/content/history?platform=linkedin"),
-        fetch("/api/connect/list"),
-        fetch("/api/linkedin/watched-profiles"),
-      ]);
-      if (historyRes.ok) {
-        const data = await historyRes.json();
-        setHistory(data.items ?? []);
-      }
-      if (connectRes.ok) {
-        const connections = await connectRes.json();
-        const li = connections.find(
-          (c: { platform: string; status: string }) =>
-            c.platform === "linkedin" && c.status === "active"
-        );
-        setConnected(!!li);
-      }
-      if (profilesRes.ok) {
-        const data = await profilesRes.json();
-        setProfiles(data.profiles ?? []);
-      }
-    } catch {
-      // Silently fail
-    } finally {
-      setLoadingHistory(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const handlePost = async () => {
-    if (!postText.trim()) return;
-    setPosting(true);
-    setPostError(null);
-    setPostSuccess(false);
-    try {
-      const postRes = await fetch("/api/linkedin/post", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: postText.trim() }),
-      });
-      const postData = await postRes.json();
-      if (!postRes.ok) {
-        setPostError(postData.error ?? "Failed to publish post");
-        return;
-      }
-      setPostSuccess(true);
-      setPostText("");
-      fetchData();
-      setTimeout(() => setPostSuccess(false), 3000);
-    } catch {
-      setPostError("Something went wrong. Please try again.");
-    } finally {
-      setPosting(false);
-    }
-  };
-
-  const handleAddProfile = async () => {
-    if (!newProfileUrl.trim()) return;
-    setAddingProfile(true);
-    setAddProfileError(null);
-    try {
-      const res = await fetch("/api/linkedin/watched-profiles", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profileUrl: newProfileUrl.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setAddProfileError(data.error ?? "Failed to add profile");
-        return;
-      }
-      setProfiles((prev) => [...prev, data.profile]);
-      setNewProfileUrl("");
-    } catch {
-      setAddProfileError("Failed to add profile");
-    } finally {
-      setAddingProfile(false);
-    }
-  };
-
-  const handleToggleProfile = async (id: string, isEnabled: boolean) => {
-    setProfiles((prev) => prev.map((p) => (p.id === id ? { ...p, isEnabled } : p)));
-    await fetch(`/api/linkedin/watched-profiles/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isEnabled }),
-    });
-  };
-
-  const handleProfileModeChange = async (id: string, replyMode: string) => {
-    setProfiles((prev) => prev.map((p) => (p.id === id ? { ...p, replyMode } : p)));
-    await fetch(`/api/linkedin/watched-profiles/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ replyMode }),
-    });
-  };
-
-  const handleRemoveProfile = async (id: string) => {
-    setProfiles((prev) => prev.filter((p) => p.id !== id));
-    await fetch(`/api/linkedin/watched-profiles/${id}`, { method: "DELETE" });
-  };
-
-  if (connected === false) {
-    return (
-      <Card className="mx-auto max-w-md mt-8">
-        <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
-          <Linkedin className="h-10 w-10 text-muted-foreground" />
-          <div>
-            <p className="font-medium">LinkedIn not connected</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Connect your LinkedIn account to start posting.
-            </p>
-          </div>
-          <Button asChild>
-            <a href="/api/connect/start/linkedin">Connect LinkedIn</a>
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Watched Profiles */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <MessageSquareReply className="h-5 w-5" />
-            <CardTitle className="text-lg">Auto-Reply Profiles</CardTitle>
-          </div>
-          <CardDescription>
-            Add LinkedIn profiles to watch. Your agent scrapes their latest posts
-            every 15 minutes and generates comments in your voice.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Add profile */}
-          <div className="flex gap-2">
-            <Input
-              value={newProfileUrl}
-              onChange={(e) => { setNewProfileUrl(e.target.value); setAddProfileError(null); }}
-              placeholder="linkedin.com/in/satyanadella"
-              onKeyDown={(e) => e.key === "Enter" && handleAddProfile()}
-              disabled={addingProfile}
-              className="flex-1"
-            />
-            <Button
-              onClick={handleAddProfile}
-              disabled={addingProfile || !newProfileUrl.trim()}
-              size="sm"
-            >
-              {addingProfile ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="mr-2 h-4 w-4" />
-              )}
-              Add
-            </Button>
-          </div>
-          {addProfileError && (
-            <p className="text-sm text-destructive">{addProfileError}</p>
-          )}
-
-          {profiles.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-2">
-              No profiles added yet. Paste a LinkedIn profile URL above.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {profiles.map((profile) => {
-                const vanity = profile.accountHandle.match(/\/in\/([^/?#]+)/)?.[1] ?? profile.accountHandle;
-                return (
-                  <div
-                    key={profile.id}
-                    className="flex items-center gap-3 rounded-lg border p-3"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{vanity}</p>
-                      {profile.replyCount > 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          {profile.replyCount} replies
-                        </p>
-                      )}
-                    </div>
-                    <Select
-                      value={profile.replyMode}
-                      onValueChange={(v) => handleProfileModeChange(profile.id, v)}
-                      disabled={!profile.isEnabled}
-                    >
-                      <SelectTrigger className="w-28">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="manual">Manual</SelectItem>
-                        <SelectItem value="auto">Auto</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Switch
-                      checked={profile.isEnabled}
-                      onCheckedChange={(v) => handleToggleProfile(profile.id, v)}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => handleRemoveProfile(profile.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Compose post */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">New LinkedIn Post</CardTitle>
-          <CardDescription>
-            Write and publish a post to your LinkedIn profile
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Textarea
-            value={postText}
-            onChange={(e) => { setPostText(e.target.value); setPostError(null); }}
-            placeholder="What do you want to share on LinkedIn?"
-            rows={5}
-            maxLength={3000}
-          />
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">
-              {postText.length}/3000
-            </span>
-            <div className="flex items-center gap-2">
-              {postError && <p className="text-sm text-destructive">{postError}</p>}
-              {postSuccess && (
-                <span className="flex items-center gap-1 text-sm text-green-600">
-                  <Check className="h-4 w-4" /> Posted!
-                </span>
-              )}
-              <Button onClick={handlePost} disabled={posting || !postText.trim()}>
-                {posting ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="mr-2 h-4 w-4" />
-                )}
-                Post to LinkedIn
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Post history */}
-      {loadingHistory ? (
-        <div className="flex justify-center py-6">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
-      ) : history.length > 0 ? (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Post History</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {history.map((post) => (
-              <div key={post.id} className="rounded-lg border p-3 space-y-1">
-                <p className="text-sm whitespace-pre-wrap">{post.content}</p>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Clock className="h-3 w-3" />
-                  {formatDistanceToNow(new Date(post.postedAt), { addSuffix: true })}
-                  <Badge variant="outline" className="text-xs">LinkedIn</Badge>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {/* LinkedIn reply feed */}
-      <ReplyFeed platform="linkedin" />
-    </div>
-  );
 }
 
 // ─── X Tab ───────────────────────────────────────────────────
@@ -904,29 +571,11 @@ export default function AutoReplyPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Auto-Replies</h1>
         <p className="text-muted-foreground">
-          Manage your AI agent across platforms
+          Manage your AI agent on X
         </p>
       </div>
 
-      <Tabs defaultValue="x">
-        <TabsList>
-          <TabsTrigger value="x" className="gap-2">
-            <Twitter className="h-4 w-4" />X
-          </TabsTrigger>
-          <TabsTrigger value="linkedin" className="gap-2">
-            <Linkedin className="h-4 w-4" />
-            LinkedIn
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="x" className="mt-6">
-          <XTab />
-        </TabsContent>
-
-        <TabsContent value="linkedin" className="mt-6">
-          <LinkedInTab />
-        </TabsContent>
-      </Tabs>
+      <XTab />
     </div>
   );
 }
