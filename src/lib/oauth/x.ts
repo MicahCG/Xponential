@@ -1,9 +1,9 @@
 import crypto from "crypto";
 import { TwitterApi } from "twitter-api-v2";
 
-const X_AUTH_URL = "https://twitter.com/i/oauth2/authorize";
-const X_TOKEN_URL = "https://api.twitter.com/2/oauth2/token";
-const X_REVOKE_URL = "https://api.twitter.com/2/oauth2/revoke";
+const X_AUTH_URL = "https://x.com/i/oauth2/authorize";
+const X_TOKEN_URL = "https://api.x.com/2/oauth2/token";
+const X_REVOKE_URL = "https://api.x.com/2/oauth2/revoke";
 
 // Note: like.read and follows.read can be added once enabled in Twitter Developer Portal
 // The ingestion gracefully falls back if those scopes aren't available
