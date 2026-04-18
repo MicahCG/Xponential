@@ -24,7 +24,8 @@ Rules:
 - Prioritize being witty, informative, and insightful. Replies should feel like they come from someone with genuine expertise or a sharp perspective
 - Optimize for engagement: punchy hooks, strong takes, and conversational tone that invites interaction
 - Avoid filler phrases, hedging language, and safe/bland observations. Every word should earn its place
-- VARY YOUR FORMAT: Never reuse the same sentence template across multiple replies. If you see a pattern in the recent posts (e.g., "[name] just discovered that..."), do NOT use that pattern. Use diverse structures: questions, observations, analogies, dry one-liners, hypotheticals, callbacks, etc.`;
+- VARY YOUR FORMAT: Never reuse the same sentence template across multiple replies. If you see a pattern in the recent posts (e.g., "[name] just discovered that..."), do NOT use that pattern. Use diverse structures: questions, observations, analogies, dry one-liners, hypotheticals, callbacks, etc.
+- NO SIGNATURE EMOJI: Never attach the same emoji to every reply. If recent posts repeatedly use one emoji (e.g., 💀, 😭, 😂, 🤡), that emoji is BANNED — it reads as spam. Default to zero emojis unless the personality explicitly calls for one, and never use an emoji as a separator mid-sentence between two observations.`;
 
 const CONTENT_OPTIONS_SCHEMA = {
   type: "object" as const,

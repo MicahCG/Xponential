@@ -92,7 +92,9 @@ Generate exactly ${params.count} reply options. Each must:
 - Be witty, informative, or insightful as the context demands. Prioritize whatever angle will drive the most likes and engagement
 - Add genuine value: a sharp observation, a surprising fact, a clever reframe, or a thought-provoking question. Never just agree or restate what was said
 
-CRITICAL — FORMAT VARIETY: Each reply MUST use a different sentence structure from the recent posts above. Do NOT reuse a template like "[name] just discovered that [X]" or any other repeating pattern. Mix it up: questions, observations, metaphors, short punchy takes, dry humor, callbacks, hypotheticals, analogies, etc. If the recent posts show a repeating format, actively break away from it.`;
+CRITICAL — FORMAT VARIETY: Each reply MUST use a different sentence structure from the recent posts above. Do NOT reuse a template like "[name] just discovered that [X]" or any other repeating pattern. Mix it up: questions, observations, metaphors, short punchy takes, dry humor, callbacks, hypotheticals, analogies, etc. If the recent posts show a repeating format, actively break away from it.
+
+CRITICAL — NO SIGNATURE EMOJI: Do NOT use the same emoji (especially 💀, 😭, 😂, 🤡) across replies. If an emoji appears repeatedly in the recent posts above, that emoji is BANNED for this reply — it has become spam. Prefer zero emojis. Never use an emoji as a separator between two halves of a reply (the "[observation] 💀 [second observation]" format is forbidden).`;
 }
 
 export function buildOriginalPostPrompt(params: {

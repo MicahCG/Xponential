@@ -43,6 +43,37 @@ CRITICAL — PREVENT FORMAT REPETITION:
 - "Do this" examples should showcase DIVERSE formats that worked, not 3-5 examples of the same template. If only one format performed well, include it once and instruct the user to develop new formats for the remaining examples.
 - Never let evolved instructions prescribe a single sentence template to follow repeatedly`;
 
+const EMOJI_REGEX = /\p{Extended_Pictographic}/gu;
+
+function filterDominantEmoji(examples: FeedbackExample[]): FeedbackExample[] {
+  if (examples.length < 3) return examples;
+  const counts = new Map<string, number>();
+  for (const ex of examples) {
+    const seen = new Set<string>();
+    for (const m of ex.text.matchAll(EMOJI_REGEX)) seen.add(m[0]);
+    for (const e of seen) counts.set(e, (counts.get(e) ?? 0) + 1);
+  }
+  const threshold = Math.ceil(examples.length / 2);
+  const dominant = new Set(
+    [...counts.entries()].filter(([, n]) => n >= threshold).map(([e]) => e)
+  );
+  if (dominant.size === 0) return examples;
+  let kept = 0;
+  const result: FeedbackExample[] = [];
+  for (const ex of examples) {
+    const usesDominant = [...ex.text.matchAll(EMOJI_REGEX)].some((m) =>
+      dominant.has(m[0])
+    );
+    if (!usesDominant) {
+      result.push(ex);
+    } else if (kept === 0) {
+      result.push(ex);
+      kept++;
+    }
+  }
+  return result;
+}
+
 function computeScore(engagement: Record<string, number>): {
   score: number;
   engagementRate: number;
@@ -174,9 +205,9 @@ Generate evolved instructions and examples based on the actual performance data 
   // Keep manually-added examples that have a URL (user explicitly saved them)
   const manualExamples = (params.existingExamples ?? []).filter((e) => e.url);
 
-  const aiDos: FeedbackExample[] = parsed.doExamples
-    .slice(0, 5)
-    .map((e) => ({ type: "do" as const, text: e.text, note: e.note }));
+  const aiDos: FeedbackExample[] = filterDominantEmoji(
+    parsed.doExamples.map((e) => ({ type: "do" as const, text: e.text, note: e.note }))
+  ).slice(0, 5);
   const aiDonts: FeedbackExample[] = parsed.dontExamples
     .slice(0, 3)
     .map((e) => ({ type: "dont" as const, text: e.text, note: e.note }));
