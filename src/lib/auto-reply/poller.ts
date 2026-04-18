@@ -26,6 +26,16 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
     debug: [],
   };
 
+  // Only run between 9am and 8pm ET
+  const now = new Date();
+  const etHour = parseInt(
+    now.toLocaleString("en-US", { timeZone: "America/New_York", hour: "numeric", hour12: false })
+  );
+  if (etHour < 9 || etHour >= 20) {
+    result.debug.push(`Outside active hours (${etHour}:00 ET). Skipping.`);
+    return result;
+  }
+
   // Get all enabled watched accounts grouped by platform connection
   const accounts = await prisma.watchedAccount.findMany({
     where: { isEnabled: true },
