@@ -49,6 +49,7 @@ interface WatchedAccount {
   replyCount: number;
   replyMode: string;
   replyType: string;
+  bypassQualityGate: boolean;
   category: string | null;
 }
 
@@ -357,6 +358,17 @@ function XTab({ connectionId }: { connectionId?: string }) {
     });
   };
 
+  const handleBypassGateChange = async (id: string, bypassQualityGate: boolean) => {
+    setAccounts((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, bypassQualityGate } : a))
+    );
+    await fetch(`/api/watched-accounts/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bypassQualityGate }),
+    });
+  };
+
   const handleRemove = async (id: string) => {
     const next = accounts.filter((a) => a.id !== id);
     setAccounts(next);
@@ -518,6 +530,9 @@ function XTab({ connectionId }: { connectionId?: string }) {
                 onReplyTypeChange={(type) =>
                   handleReplyTypeChange(account.id, type)
                 }
+                onBypassGateChange={(bypass) =>
+                  handleBypassGateChange(account.id, bypass)
+                }
                 onRemove={() => handleRemove(account.id)}
               />
             ))}
@@ -547,6 +562,9 @@ function XTab({ connectionId }: { connectionId?: string }) {
                 onModeChange={(mode) => handleModeChange(account.id, mode)}
                 onReplyTypeChange={(type) =>
                   handleReplyTypeChange(account.id, type)
+                }
+                onBypassGateChange={(bypass) =>
+                  handleBypassGateChange(account.id, bypass)
                 }
                 onRemove={() => handleRemove(account.id)}
               />
@@ -646,6 +664,7 @@ function WatchedAccountCard({
   onToggle,
   onModeChange,
   onReplyTypeChange,
+  onBypassGateChange,
   onRemove,
 }: {
   account: WatchedAccount;
@@ -653,6 +672,7 @@ function WatchedAccountCard({
   onToggle: (enabled: boolean) => void;
   onModeChange: (mode: string) => void;
   onReplyTypeChange: (type: string) => void;
+  onBypassGateChange: (bypass: boolean) => void;
   onRemove: () => void;
 }) {
   return (
@@ -722,6 +742,21 @@ function WatchedAccountCard({
             <SelectItem value="auto">Auto</SelectItem>
           </SelectContent>
         </Select>
+
+        <label
+          className={cn(
+            "flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap",
+            !account.isEnabled && "opacity-40"
+          )}
+          title="When on, reply to every new tweet from this account (skip the quality gate)"
+        >
+          <Switch
+            checked={account.bypassQualityGate}
+            onCheckedChange={onBypassGateChange}
+            disabled={!account.isEnabled}
+          />
+          Always reply
+        </label>
 
         <Switch
           checked={account.isEnabled}

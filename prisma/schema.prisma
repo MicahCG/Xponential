@@ -227,6 +227,9 @@ model WatchedAccount {
   replyType            String   @default("text") @map("reply_type")
   lastCheckedTweetId   String?  @map("last_checked_tweet_id")
   category             String?
+  replyThreshold       Int      @default(55) @map("reply_threshold")
+  bypassQualityGate    Boolean  @default(false) @map("bypass_quality_gate")
+  skipCriteria         Json?    @map("skip_criteria")
   createdAt            DateTime @default(now()) @map("created_at")
 
   user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -282,6 +285,8 @@ model AutoReplyLog {
   apifyRunId          String?   @map("apify_run_id")
   status              String    @default("pending")
   errorMessage        String?   @map("error_message") @db.Text
+  qualityScore        Int?      @map("quality_score")
+  skipReasons         Json?     @map("skip_reasons")
   generationStartedAt DateTime? @map("generation_started_at")
   createdAt           DateTime  @default(now()) @map("created_at")
   postedAt            DateTime? @map("posted_at")

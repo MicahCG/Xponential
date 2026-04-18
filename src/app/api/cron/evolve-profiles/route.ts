@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { evolveProfiles } from "@/lib/learning/profile-evolver";
+import { analyzeGates } from "@/lib/learning/gate-analyzer";
 
 export const maxDuration = 300;
 
@@ -10,11 +11,15 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await evolveProfiles("x");
-    console.log("Profile evolution complete:", result);
-    return NextResponse.json(result);
+    const [profileResult, gateResult] = await Promise.all([
+      evolveProfiles("x"),
+      analyzeGates("x"),
+    ]);
+    console.log("Profile evolution complete:", profileResult);
+    console.log("Gate analysis complete:", gateResult);
+    return NextResponse.json({ profile: profileResult, gate: gateResult });
   } catch (error) {
-    console.error("Profile evolution error:", error);
+    console.error("Evolve/analyze error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Evolution failed" },
       { status: 500 }

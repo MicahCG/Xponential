@@ -46,6 +46,9 @@ export async function PUT(
   if (body.replyType === "text" || body.replyType === "video") {
     updateData.replyType = body.replyType;
   }
+  if (typeof body.bypassQualityGate === "boolean") {
+    updateData.bypassQualityGate = body.bypassQualityGate;
+  }
 
   const updated = await prisma.watchedAccount.update({
     where: { id },

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getValidAccessToken, getAccountRecentTweets, getUsersByUsernames, postTweetWithRetry, XPostError } from "@/lib/platform/x-client";
 import { generateContent } from "@/lib/content/generator";
+import { scoreTweet, decideFromScore, loadPersonalityForGate } from "@/lib/auto-reply/quality-gate";
 
 export interface PollResult {
   accountsChecked: number;
@@ -139,6 +140,52 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
               );
               continue;
             }
+
+            // Quality gate: score the tweet before spending tokens on generation.
+            // Bypass per-account toggle skips the gate entirely.
+            let qualityScore: number | null = null;
+            let skipReasons: string[] | null = null;
+            if (!account.bypassQualityGate) {
+              const personality = await loadPersonalityForGate(userId, connectionId);
+              if (personality) {
+                const learnedCriteria =
+                  (account.skipCriteria as string[] | null) ?? null;
+                const score = await scoreTweet({
+                  tweetText: tweet.text,
+                  targetAuthor: account.accountHandle,
+                  personality,
+                  learnedSkipCriteria: learnedCriteria,
+                });
+                const decision = decideFromScore(score, account.replyThreshold);
+                qualityScore = decision.score;
+                result.debug.push(
+                  `@${account.accountHandle}: gate score ${decision.score} (threshold ${decision.threshold}, roll ${decision.samplingRoll.toFixed(2)}) — ${decision.shouldReply ? "pass" : "skip"}`
+                );
+                if (!decision.shouldReply) {
+                  skipReasons = decision.reasons;
+                  await prisma.autoReplyLog.create({
+                    data: {
+                      userId,
+                      watchedAccountId: account.id,
+                      targetTweetId: tweet.id,
+                      targetTweetText: tweet.text,
+                      targetAuthor: account.accountHandle,
+                      replyContent: "",
+                      replyType: account.replyType,
+                      status: "skipped_low_quality",
+                      qualityScore,
+                      skipReasons: skipReasons as object,
+                    },
+                  });
+                  continue;
+                }
+              } else {
+                result.debug.push(
+                  `@${account.accountHandle}: no personality profile found for gate — passing through`
+                );
+              }
+            }
+
             if (account.replyType === "video") {
               // Guard: skip video queueing if Popcorn isn't configured
               const popcornConfigured = !!(process.env.POPCORN_API_URL && process.env.MCP_API_KEY);
@@ -169,6 +216,7 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
                   replyContent: "",
                   replyType: "video",
                   status: "pending",
+                  qualityScore,
                 },
               });
             } else {
@@ -211,6 +259,7 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
                       replyTweetId: posted.id,
                       status: "posted",
                       postedAt: new Date(),
+                      qualityScore,
                     },
                   });
 
@@ -246,6 +295,7 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
                       replyContent,
                       replyType: "text",
                       status: postStatus,
+                      qualityScore,
                     },
                   });
 
@@ -270,6 +320,7 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
                     replyContent,
                     replyType: "text",
                     status: "pending",
+                    qualityScore,
                   },
                 });
               }
