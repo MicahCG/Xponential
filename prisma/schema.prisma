@@ -228,7 +228,7 @@ model WatchedAccount {
   lastCheckedTweetId   String?  @map("last_checked_tweet_id")
   category             String?
   replyThreshold       Int      @default(55) @map("reply_threshold")
-  bypassQualityGate    Boolean  @default(false) @map("bypass_quality_gate")
+  bypassQualityGate    Boolean  @default(true) @map("bypass_quality_gate")
   skipCriteria         Json?    @map("skip_criteria")
   createdAt            DateTime @default(now()) @map("created_at")
 

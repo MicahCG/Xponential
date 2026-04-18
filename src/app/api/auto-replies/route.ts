@@ -9,7 +9,10 @@ export async function GET() {
   }
 
   const replies = await prisma.autoReplyLog.findMany({
-    where: { userId: session.user.id },
+    where: {
+      userId: session.user.id,
+      status: { not: "skipped_low_quality" },
+    },
     orderBy: { createdAt: "desc" },
     take: 20,
     select: {

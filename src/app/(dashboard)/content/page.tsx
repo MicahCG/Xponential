@@ -748,7 +748,7 @@ function WatchedAccountCard({
             "flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap",
             !account.isEnabled && "opacity-40"
           )}
-          title="When on, reply to every new tweet from this account (skip the quality gate)"
+          title="On (default): reply to every new tweet from this account. Off: use smart suggestions — only reply to tweets the quality gate rates as worth engaging with."
         >
           <Switch
             checked={account.bypassQualityGate}
