@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import * as xOAuth from "@/lib/oauth/x";
+import * as pinterestOAuth from "@/lib/oauth/pinterest";
 import { getCurrentBrand } from "@/lib/brand-context";
 
 export async function GET(
@@ -44,6 +45,35 @@ export async function GET(
       codeChallenge,
     });
 
+    return NextResponse.redirect(authUrl);
+  }
+
+  if (platform === "pinterest") {
+    const clientId = process.env.PINTEREST_CLIENT_ID;
+    const redirectUri = process.env.PINTEREST_CALLBACK_URL;
+    if (!clientId || !redirectUri) {
+      return NextResponse.json(
+        {
+          error:
+            "Pinterest OAuth is not configured. Set PINTEREST_CLIENT_ID and PINTEREST_CALLBACK_URL in env.",
+        },
+        { status: 500 }
+      );
+    }
+    const state = pinterestOAuth.generateState();
+
+    await prisma.oAuthState.create({
+      data: {
+        state,
+        userId: session.user.id,
+        brandId: brand.id,
+        platform: "pinterest",
+        returnTo,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      },
+    });
+
+    const authUrl = pinterestOAuth.buildAuthUrl({ clientId, redirectUri, state });
     return NextResponse.redirect(authUrl);
   }
 

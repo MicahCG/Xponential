@@ -11,15 +11,20 @@ export default async function ComposePinPage() {
   const brand = await getCurrentBrand(session.user!.id as string);
 
   const connection = await prisma.platformConnection.findFirst({
-    where: {
-      brandId: brand.id,
-      platform: "pinterest",
-      status: "active",
+    where: { brandId: brand.id, platform: "pinterest" },
+    select: {
+      accountHandle: true,
+      accessToken: true,
+      status: true,
+      pinterestCookie: true,
     },
-    select: { id: true, accountHandle: true, pinterestCookie: true },
   });
 
-  if (!connection || !connection.pinterestCookie) {
+  const apiConnected =
+    !!connection?.accessToken && connection.status === "active";
+  const cookieConfigured = !!connection?.pinterestCookie;
+
+  if (!apiConnected && !cookieConfigured) {
     redirect("/connections/pinterest");
   }
 
@@ -30,13 +35,16 @@ export default async function ComposePinPage() {
         <p className="text-muted-foreground">
           Posting to{" "}
           <span className="font-medium text-foreground">
-            @{connection.accountHandle}
+            @{connection?.accountHandle}
           </span>{" "}
           on Pinterest for{" "}
           <span className="font-medium text-foreground">{brand.name}</span>.
         </p>
       </div>
-      <PinComposer />
+      <PinComposer
+        apiConnected={apiConnected}
+        cookieConfigured={cookieConfigured}
+      />
     </div>
   );
 }

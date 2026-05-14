@@ -93,15 +93,20 @@ export function PinterestConnectForm({
   }
 
   return (
-    <Card>
+    <Card className="border-amber-500/30 bg-amber-500/[0.02]">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Cookie className="h-5 w-5" />
-          Pinterest cookie auth
+          <Cookie className="h-5 w-5 text-amber-600" />
+          Cookie Fallback —{" "}
+          <span className="text-amber-700 dark:text-amber-500">
+            Internal Testing Only
+          </span>
         </CardTitle>
         <CardDescription>
-          Paste your Pinterest session cookie (header-string format) so we can
-          publish pins via the Apify actor.
+          Not part of the production path. Use the Official Pinterest API above
+          for publishing whenever it&apos;s connected. This cookie path exists
+          only as an internal fallback before Standard Access is granted, and
+          will not be used while the API path is connected.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -109,8 +114,8 @@ export function PinterestConnectForm({
           <div className="rounded-md bg-green-500/10 p-3 text-sm text-green-700 dark:text-green-400">
             <span className="flex items-center gap-2">
               <Check className="h-4 w-4" />
-              Connected as{" "}
-              <span className="font-medium">@{currentHandle}</span> · cookie{" "}
+              Cookie configured for{" "}
+              <span className="font-medium">@{currentHandle}</span> ·{" "}
               <code className="text-xs">{cookiePreview}</code>
             </span>
           </div>

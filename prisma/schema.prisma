@@ -32,6 +32,7 @@ model User {
   contentLearnings    ContentLearning[]
   followerSnapshots   FollowerSnapshot[]
   videoPosts          VideoPost[]
+  pinterestApiLogs    PinterestApiLog[]
 
   @@map("users")
 }
@@ -56,10 +57,31 @@ model Brand {
   contentLearnings    ContentLearning[]
   followerSnapshots   FollowerSnapshot[]
   videoPosts          VideoPost[]
+  pinterestApiLogs    PinterestApiLog[]
 
   @@unique([userId, slug])
   @@index([userId])
   @@map("brands")
+}
+
+model PinterestApiLog {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  brandId        String   @map("brand_id")
+  method         String
+  endpoint       String
+  requestBody    Json?    @map("request_body")
+  responseStatus Int?     @map("response_status")
+  responseBody   Json?    @map("response_body")
+  success        Boolean
+  errorMessage   String?  @map("error_message") @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId, createdAt])
+  @@map("pinterest_api_logs")
 }
 
 model Account {
@@ -221,6 +243,7 @@ model PostHistory {
   videoUrl         String?   @map("video_url")
   videoFormat      String?   @map("video_format")
   imageUrl         String?   @map("image_url")
+  postingMethod    String?   @map("posting_method")
   platformPostId   String?   @map("platform_post_id")
   postedAt         DateTime  @default(now()) @map("posted_at")
   engagement       Json      @default("{}")

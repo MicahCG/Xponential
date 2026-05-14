@@ -1,6 +1,8 @@
 import { requireAuth } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrand } from "@/lib/brand-context";
+import { PinterestMethodStatus } from "@/components/connections/pinterest-method-status";
+import { PinterestOAuthConnect } from "@/components/connections/pinterest-oauth-connect";
 import { PinterestConnectForm } from "@/components/connections/pinterest-connect-form";
 
 export const metadata = {
@@ -17,35 +19,60 @@ export default async function PinterestConnectPage() {
       id: true,
       accountHandle: true,
       status: true,
+      accessToken: true,
+      tokenExpires: true,
       pinterestCookie: true,
-      connectedAt: true,
     },
   });
+
+  const apiConnected = !!connection?.accessToken && connection.status === "active";
+  const cookieConfigured = !!connection?.pinterestCookie;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          Connect Pinterest
-        </h1>
+        <h1 className="text-2xl font-bold tracking-tight">Connect Pinterest</h1>
         <p className="text-muted-foreground">
-          Pinterest doesn&apos;t have OAuth approval yet, so we use cookie-based
-          auth via Apify — just like the X path. Paste your Pinterest session
-          cookie and we&apos;ll be able to publish pins for{" "}
-          <span className="font-medium text-foreground">{brand.name}</span>.
+          Connecting Pinterest to{" "}
+          <span className="font-medium text-foreground">{brand.name}</span>. The
+          Official Pinterest API is the production path; the cookie fallback
+          below is for internal testing only.
         </p>
       </div>
 
-      <PinterestConnectForm
-        currentHandle={connection?.accountHandle ?? null}
-        hasCookie={!!connection?.pinterestCookie}
-        cookiePreview={
-          connection?.pinterestCookie
-            ? connection.pinterestCookie.slice(0, 40) + "…"
+      <PinterestMethodStatus
+        apiConnected={apiConnected}
+        cookieConfigured={cookieConfigured}
+      />
+
+      <PinterestOAuthConnect
+        connected={apiConnected}
+        accountHandle={apiConnected ? (connection?.accountHandle ?? null) : null}
+        tokenExpiresAt={
+          apiConnected && connection?.tokenExpires
+            ? connection.tokenExpires.toISOString()
             : null
         }
         brandName={brand.name}
       />
+
+      <details className="group">
+        <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
+          Show internal cookie fallback
+        </summary>
+        <div className="mt-4">
+          <PinterestConnectForm
+            currentHandle={connection?.accountHandle ?? null}
+            hasCookie={cookieConfigured}
+            cookiePreview={
+              connection?.pinterestCookie
+                ? connection.pinterestCookie.slice(0, 40) + "…"
+                : null
+            }
+            brandName={brand.name}
+          />
+        </div>
+      </details>
     </div>
   );
 }

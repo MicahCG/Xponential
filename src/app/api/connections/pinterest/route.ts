@@ -62,10 +62,10 @@ export async function POST(request: NextRequest) {
 
   const handle = parsed.data.accountHandle.replace(/^@/, "");
 
-  // Upsert by (brandId, platform, accountId). Use handle as accountId for now —
-  // can be replaced with a real Pinterest user ID once we have an API path.
+  // One pinterest connection per brand — augment whichever row exists (OAuth
+  // may have created it already). Otherwise create a cookie-only row.
   const existing = await prisma.platformConnection.findFirst({
-    where: { brandId: brand.id, platform: "pinterest", accountHandle: handle },
+    where: { brandId: brand.id, platform: "pinterest" },
   });
 
   const connection = existing
@@ -73,6 +73,8 @@ export async function POST(request: NextRequest) {
         where: { id: existing.id },
         data: {
           pinterestCookie: parsed.data.pinterestCookie,
+          // Don't downgrade an OAuth-active handle if cookie typed a different one
+          ...(existing.accountHandle == null && { accountHandle: handle }),
           status: "active",
         },
         select: { id: true, accountHandle: true },
@@ -100,8 +102,12 @@ export async function DELETE() {
   }
   const brand = await getCurrentBrand(session.user.id);
 
-  const r = await prisma.platformConnection.deleteMany({
+  // Only clear the cookie; leave the OAuth side intact. If the row exists only
+  // for the cookie path (no OAuth), this turns it into an empty row — that's
+  // fine for now since loadActiveConnection gates on accessToken.
+  const r = await prisma.platformConnection.updateMany({
     where: { brandId: brand.id, platform: "pinterest" },
+    data: { pinterestCookie: null },
   });
-  return NextResponse.json({ deleted: r.count });
+  return NextResponse.json({ updated: r.count });
 }

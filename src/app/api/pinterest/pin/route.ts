@@ -3,15 +3,25 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrand } from "@/lib/brand-context";
-import { createPin, PinterestPostError } from "@/lib/platform/pinterest-poster";
+import {
+  loadActiveConnection,
+  createPin as createPinViaApi,
+  PinterestApiError,
+} from "@/lib/platform/pinterest-client";
+import { createPin as createPinViaApify, PinterestPostError } from "@/lib/platform/pinterest-poster";
 
 const pinSchema = z.object({
+  method: z.enum(["api", "fallback"]).default("api"),
   imageUrl: z.string().url().max(2000),
   title: z.string().trim().min(1).max(100),
   description: z.string().trim().max(500).default(""),
+  // API path: boardId is preferred (returned by /api/pinterest/boards)
+  boardId: z.string().trim().max(100).optional(),
+  // Fallback path uses boardName or boardUrl
   boardName: z.string().trim().max(100).optional(),
   boardUrl: z.string().url().max(500).optional(),
   destinationUrl: z.string().url().max(2000).optional(),
+  altText: z.string().trim().max(500).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -26,32 +36,90 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
-  if (!parsed.data.boardName && !parsed.data.boardUrl) {
-    return NextResponse.json(
-      { error: "Either boardName or boardUrl is required." },
-      { status: 400 }
-    );
+
+  if (parsed.data.method === "api") {
+    if (!parsed.data.boardId) {
+      return NextResponse.json(
+        { error: "boardId is required for the official API path. Select a board from your account." },
+        { status: 400 }
+      );
+    }
+
+    const conn = await loadActiveConnection(brand.id);
+    if (!conn || !conn.accessToken) {
+      return NextResponse.json(
+        {
+          error:
+            "Pinterest API is not connected for this brand. Click 'Connect with Pinterest' first.",
+        },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const result = await createPinViaApi(conn, {
+        boardId: parsed.data.boardId,
+        title: parsed.data.title,
+        description: parsed.data.description,
+        imageUrl: parsed.data.imageUrl,
+        link: parsed.data.destinationUrl,
+        altText: parsed.data.altText,
+      });
+
+      const record = await prisma.postHistory.create({
+        data: {
+          userId: session.user.id,
+          brandId: brand.id,
+          platform: "pinterest",
+          postType: "original",
+          content: parsed.data.description,
+          imageUrl: parsed.data.imageUrl,
+          platformPostId: result.id,
+          postingMethod: "pinterest_api",
+        },
+        select: { id: true },
+      });
+
+      return NextResponse.json({
+        ok: true,
+        method: "pinterest_api",
+        pinId: result.id,
+        pinUrl: result.link,
+        historyId: record.id,
+      });
+    } catch (err) {
+      if (err instanceof PinterestApiError) {
+        return NextResponse.json(
+          {
+            error: err.message,
+            httpCode: err.httpCode,
+            responseBody: err.responseBody,
+          },
+          { status: err.isAuthError ? 401 : 502 }
+        );
+      }
+      console.error("[pinterest/pin] API path unexpected error:", err);
+      return NextResponse.json(
+        { error: "Unexpected error from Pinterest API path." },
+        { status: 500 }
+      );
+    }
   }
 
-  const connection = await prisma.platformConnection.findFirst({
-    where: {
-      brandId: brand.id,
-      platform: "pinterest",
-      status: "active",
-    },
-    select: { id: true },
-  });
-  if (!connection) {
+  // ── Fallback path (cookie / Apify) ──
+  if (!parsed.data.boardName && !parsed.data.boardUrl) {
     return NextResponse.json(
-      { error: "Pinterest is not connected for this brand." },
+      {
+        error:
+          "Fallback path requires boardName or boardUrl since it doesn't have access to your board list.",
+      },
       { status: 400 }
     );
   }
 
   try {
-    const result = await createPin({
+    const result = await createPinViaApify({
       brandId: brand.id,
-      connectionId: connection.id,
       imageUrl: parsed.data.imageUrl,
       title: parsed.data.title,
       description: parsed.data.description,
@@ -69,12 +137,14 @@ export async function POST(request: NextRequest) {
         content: parsed.data.description,
         imageUrl: parsed.data.imageUrl,
         platformPostId: result.pinId,
+        postingMethod: "apify_cookie",
       },
       select: { id: true },
     });
 
     return NextResponse.json({
       ok: true,
+      method: "apify_cookie",
       pinId: result.pinId,
       pinUrl: result.pinUrl ?? null,
       historyId: record.id,
@@ -86,9 +156,9 @@ export async function POST(request: NextRequest) {
         { status: err.isAuthError ? 401 : 502 }
       );
     }
-    console.error("[pinterest/pin] unexpected error:", err);
+    console.error("[pinterest/pin] fallback path unexpected error:", err);
     return NextResponse.json(
-      { error: "Unexpected error creating pin." },
+      { error: "Unexpected error from Pinterest fallback path." },
       { status: 500 }
     );
   }

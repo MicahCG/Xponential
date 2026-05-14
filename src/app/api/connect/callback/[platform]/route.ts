@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import * as xOAuth from "@/lib/oauth/x";
+import * as pinterestOAuth from "@/lib/oauth/pinterest";
 import { getUserProfile as getXProfile } from "@/lib/platform/x-client";
+import { getUserAccount as getPinterestProfile } from "@/lib/platform/pinterest-client";
 import { getDefaultBrandForUser } from "@/lib/brand-context";
 
 export async function GET(
@@ -111,6 +113,76 @@ export async function GET(
       return NextResponse.redirect(
         new URL(xRedirect, request.url)
       );
+    }
+
+    if (platform === "pinterest") {
+      if (oauthState.platform !== "pinterest") {
+        return NextResponse.redirect(
+          new URL("/connections/pinterest?error=invalid_state", request.url)
+        );
+      }
+
+      const clientId = process.env.PINTEREST_CLIENT_ID!;
+      const clientSecret = process.env.PINTEREST_CLIENT_SECRET!;
+      const redirectUri = process.env.PINTEREST_CALLBACK_URL!;
+
+      const tokens = await pinterestOAuth.exchangeCode({
+        code,
+        clientId,
+        clientSecret,
+        redirectUri,
+      });
+
+      // Pinterest doesn't always return a stable account id we can dedupe on
+      // in the token response, so we fetch the user_account ourselves.
+      // Create a temporary connection-shaped object so the client helper works
+      // before we persist the row.
+      const tempConn = {
+        id: "pending",
+        brandId,
+        userId,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        tokenExpires: new Date(Date.now() + tokens.expires_in * 1000),
+      };
+      const profile = await getPinterestProfile(tempConn);
+      const username = profile.username;
+
+      const existing = await prisma.platformConnection.findFirst({
+        where: { userId, platform: "pinterest", accountId: username },
+      });
+
+      const tokenExpires = new Date(Date.now() + tokens.expires_in * 1000);
+      const connectionRow = existing
+        ? await prisma.platformConnection.update({
+            where: { id: existing.id },
+            data: {
+              brandId,
+              accessToken: tokens.access_token,
+              refreshToken: tokens.refresh_token,
+              tokenExpires,
+              accountHandle: username,
+              status: "active",
+            },
+            select: { id: true },
+          })
+        : await prisma.platformConnection.create({
+            data: {
+              userId,
+              brandId,
+              platform: "pinterest",
+              accessToken: tokens.access_token,
+              refreshToken: tokens.refresh_token,
+              tokenExpires,
+              accountHandle: username,
+              accountId: username,
+            },
+            select: { id: true },
+          });
+
+      const pinRedirect =
+        returnTo ?? `/connections/pinterest?connected=1&id=${connectionRow.id}`;
+      return NextResponse.redirect(new URL(pinRedirect, request.url));
     }
 
     return NextResponse.redirect(

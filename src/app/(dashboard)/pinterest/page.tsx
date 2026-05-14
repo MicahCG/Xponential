@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentBrand } from "@/lib/brand-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Pin, Plus, Cookie } from "lucide-react";
+import { PinterestMethodStatus } from "@/components/connections/pinterest-method-status";
+import { Pin, Plus, Cookie, ShieldCheck, AlertCircle, FileText } from "lucide-react";
 
 export const metadata = { title: "Pinterest - Xponential" };
 
@@ -14,11 +15,20 @@ export default async function PinterestPage() {
 
   const connection = await prisma.platformConnection.findFirst({
     where: { brandId: brand.id, platform: "pinterest" },
-    select: { id: true, accountHandle: true, pinterestCookie: true },
+    select: {
+      accountHandle: true,
+      accessToken: true,
+      status: true,
+      pinterestCookie: true,
+    },
   });
-  const hasConnection = !!connection?.pinterestCookie;
 
-  const pins = hasConnection
+  const apiConnected =
+    !!connection?.accessToken && connection.status === "active";
+  const cookieConfigured = !!connection?.pinterestCookie;
+  const anyConnection = apiConnected || cookieConfigured;
+
+  const pins = anyConnection
     ? await prisma.postHistory.findMany({
         where: { brandId: brand.id, platform: "pinterest" },
         orderBy: { postedAt: "desc" },
@@ -29,6 +39,7 @@ export default async function PinterestPage() {
           imageUrl: true,
           platformPostId: true,
           postedAt: true,
+          postingMethod: true,
         },
       })
     : [];
@@ -42,7 +53,7 @@ export default async function PinterestPage() {
             Pinterest
           </h1>
           <p className="text-muted-foreground">
-            {hasConnection ? (
+            {anyConnection ? (
               <>
                 Connected as{" "}
                 <span className="font-medium text-foreground">
@@ -60,24 +71,39 @@ export default async function PinterestPage() {
             )}
           </p>
         </div>
-        {hasConnection ? (
-          <Link href="/pinterest/compose">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              New pin
-            </Button>
-          </Link>
-        ) : (
-          <Link href="/connections/pinterest">
-            <Button>
-              <Cookie className="mr-2 h-4 w-4" />
-              Connect Pinterest
-            </Button>
-          </Link>
-        )}
+        <div className="flex gap-2">
+          {anyConnection && (
+            <Link href="/pinterest/logs">
+              <Button variant="outline">
+                <FileText className="mr-2 h-4 w-4" />
+                API logs
+              </Button>
+            </Link>
+          )}
+          {anyConnection ? (
+            <Link href="/pinterest/compose">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                New pin
+              </Button>
+            </Link>
+          ) : (
+            <Link href="/connections/pinterest">
+              <Button>
+                <Cookie className="mr-2 h-4 w-4" />
+                Connect Pinterest
+              </Button>
+            </Link>
+          )}
+        </div>
       </div>
 
-      {hasConnection && pins.length === 0 && (
+      <PinterestMethodStatus
+        apiConnected={apiConnected}
+        cookieConfigured={cookieConfigured}
+      />
+
+      {anyConnection && pins.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             No pins yet. Compose your first one.
@@ -102,12 +128,29 @@ export default async function PinterestPage() {
                     no image
                   </div>
                 )}
+                {pin.postingMethod && (
+                  <div className="absolute right-1 top-1">
+                    {pin.postingMethod === "pinterest_api" ? (
+                      <span className="flex items-center gap-1 rounded bg-green-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                        <ShieldCheck className="h-3 w-3" />
+                        API
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 rounded bg-amber-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                        <AlertCircle className="h-3 w-3" />
+                        Fallback
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
               <CardContent className="space-y-1 p-3">
                 <p className="text-xs text-muted-foreground">
                   {new Date(pin.postedAt).toLocaleDateString()}
                 </p>
-                <p className="line-clamp-3 text-sm">{pin.content || "(no description)"}</p>
+                <p className="line-clamp-3 text-sm">
+                  {pin.content || "(no description)"}
+                </p>
               </CardContent>
             </Card>
           ))}
