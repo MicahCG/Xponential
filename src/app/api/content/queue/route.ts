@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     | "rejected"
     | "posted"
     | null;
-  const platform = searchParams.get("platform") as "x" | "linkedin" | null;
+  const platform = searchParams.get("platform") as "x" | null;
 
   const where: Record<string, unknown> = { userId: session.user.id };
   if (status) where.status = status;

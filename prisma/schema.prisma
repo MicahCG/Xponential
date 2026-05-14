@@ -106,7 +106,6 @@ model VerificationToken {
 
 enum Platform {
   x
-  linkedin
 }
 
 enum ConnectionStatus {

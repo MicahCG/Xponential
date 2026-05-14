@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   }
 
   const searchParams = request.nextUrl.searchParams;
-  const platform = searchParams.get("platform") as "x" | "linkedin" | null;
+  const platform = searchParams.get("platform") as "x" | null;
   const page = parseInt(searchParams.get("page") ?? "1");
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "20"), 50);
 

@@ -15,7 +15,7 @@ Your task is to build a comprehensive personality profile that captures the auth
 Be specific and detailed. Don't use generic descriptions. Pull real patterns from the provided data.
 For sample_phrases, include 5-10 characteristic phrases or sentence structures.
 For avoid_patterns, identify things this person would NEVER say.
-For platform_overrides, suggest how the tone might slightly differ between X (shorter, punchier) and LinkedIn (more professional, longer form).`;
+For platform_overrides, capture any X-specific tone notes (shorter, punchier, more meme-aware) that differ from longer-form writing.`;
 
 const INGEST_SYSTEM_PROMPT = `You are an expert at analyzing writing style, personality, and engagement patterns from social media content.
 
