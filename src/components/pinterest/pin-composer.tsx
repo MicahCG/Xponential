@@ -231,47 +231,46 @@ export function PinComposer() {
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="board">Board</Label>
-              <Select value={boardId} onValueChange={setBoardId}>
-                <SelectTrigger id="board">
-                  <SelectValue
-                    placeholder={boardsLoading ? "Loading…" : "Select a board"}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {boards.length === 0 && !boardsLoading && (
-                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                      No boards found
-                    </div>
-                  )}
-                  {boards.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
-                      {b.privacy === "SECRET" && (
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          (secret)
-                        </span>
-                      )}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="destination-url">Destination URL (optional)</Label>
-              <Input
-                id="destination-url"
-                placeholder="https://your-affiliate-link.com/…"
-                value={destinationUrl}
-                onChange={(e) => {
-                  setDestinationUrl(e.target.value);
-                  setError(null);
-                }}
-                type="url"
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="board">Board</Label>
+            <Select value={boardId} onValueChange={setBoardId}>
+              <SelectTrigger id="board">
+                <SelectValue
+                  placeholder={boardsLoading ? "Loading…" : "Select a board"}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {boards.length === 0 && !boardsLoading && (
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                    No boards found
+                  </div>
+                )}
+                {boards.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                    {b.privacy === "SECRET" && (
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        (secret)
+                      </span>
+                    )}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="destination-url">Destination URL (optional)</Label>
+            <Input
+              id="destination-url"
+              placeholder="https://your-affiliate-link.com/…"
+              value={destinationUrl}
+              onChange={(e) => {
+                setDestinationUrl(e.target.value);
+                setError(null);
+              }}
+              type="url"
+            />
           </div>
 
           <div className="space-y-2">
