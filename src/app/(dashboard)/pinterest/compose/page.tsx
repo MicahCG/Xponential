@@ -16,15 +16,13 @@ export default async function ComposePinPage() {
       accountHandle: true,
       accessToken: true,
       status: true,
-      pinterestCookie: true,
     },
   });
 
   const apiConnected =
     !!connection?.accessToken && connection.status === "active";
-  const cookieConfigured = !!connection?.pinterestCookie;
 
-  if (!apiConnected && !cookieConfigured) {
+  if (!apiConnected) {
     redirect("/connections/pinterest");
   }
 
@@ -33,18 +31,15 @@ export default async function ComposePinPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Compose a pin</h1>
         <p className="text-muted-foreground">
-          Posting to{" "}
+          Publishing to{" "}
           <span className="font-medium text-foreground">
             @{connection?.accountHandle}
           </span>{" "}
-          on Pinterest for{" "}
+          on Pinterest via the official API for{" "}
           <span className="font-medium text-foreground">{brand.name}</span>.
         </p>
       </div>
-      <PinComposer
-        apiConnected={apiConnected}
-        cookieConfigured={cookieConfigured}
-      />
+      <PinComposer />
     </div>
   );
 }

@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentBrand } from "@/lib/brand-context";
 import { PinterestMethodStatus } from "@/components/connections/pinterest-method-status";
 import { PinterestOAuthConnect } from "@/components/connections/pinterest-oauth-connect";
-import { PinterestConnectForm } from "@/components/connections/pinterest-connect-form";
 
 export const metadata = {
   title: "Connect Pinterest - Xponential",
@@ -21,29 +20,24 @@ export default async function PinterestConnectPage() {
       status: true,
       accessToken: true,
       tokenExpires: true,
-      pinterestCookie: true,
     },
   });
 
   const apiConnected = !!connection?.accessToken && connection.status === "active";
-  const cookieConfigured = !!connection?.pinterestCookie;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Connect Pinterest</h1>
         <p className="text-muted-foreground">
-          Connecting Pinterest to{" "}
-          <span className="font-medium text-foreground">{brand.name}</span>. The
-          Official Pinterest API is the production path; the cookie fallback
-          below is for internal testing only.
+          Connect{" "}
+          <span className="font-medium text-foreground">{brand.name}</span> to
+          Pinterest via the official Pinterest API. Each pin is published only
+          when a human clicks Publish.
         </p>
       </div>
 
-      <PinterestMethodStatus
-        apiConnected={apiConnected}
-        cookieConfigured={cookieConfigured}
-      />
+      <PinterestMethodStatus apiConnected={apiConnected} />
 
       <PinterestOAuthConnect
         connected={apiConnected}
@@ -55,24 +49,6 @@ export default async function PinterestConnectPage() {
         }
         brandName={brand.name}
       />
-
-      <details className="group">
-        <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
-          Show internal cookie fallback
-        </summary>
-        <div className="mt-4">
-          <PinterestConnectForm
-            currentHandle={connection?.accountHandle ?? null}
-            hasCookie={cookieConfigured}
-            cookiePreview={
-              connection?.pinterestCookie
-                ? connection.pinterestCookie.slice(0, 40) + "…"
-                : null
-            }
-            brandName={brand.name}
-          />
-        </div>
-      </details>
     </div>
   );
 }

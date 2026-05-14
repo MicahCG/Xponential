@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -21,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Pin, ShieldCheck, AlertCircle, Send } from "lucide-react";
+import { Loader2, Pin, ShieldCheck, Send } from "lucide-react";
 
 interface Board {
   id: string;
@@ -30,22 +29,12 @@ interface Board {
   pinCount: number | null;
 }
 
-interface Props {
-  apiConnected: boolean;
-  cookieConfigured: boolean;
-}
-
-export function PinComposer({ apiConnected, cookieConfigured }: Props) {
+export function PinComposer() {
   const router = useRouter();
 
-  // Posting method — default to API when available, otherwise fallback
-  const [method, setMethod] = useState<"api" | "fallback">(
-    apiConnected ? "api" : "fallback"
-  );
   const [boards, setBoards] = useState<Board[]>([]);
-  const [boardsLoading, setBoardsLoading] = useState(false);
+  const [boardsLoading, setBoardsLoading] = useState(true);
   const [boardId, setBoardId] = useState<string>("");
-  const [boardName, setBoardName] = useState("");
 
   const [imageUrl, setImageUrl] = useState("");
   const [title, setTitle] = useState("");
@@ -56,23 +45,19 @@ export function PinComposer({ apiConnected, cookieConfigured }: Props) {
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{
-    method: string;
     pinId: string;
     pinUrl: string | null;
   } | null>(null);
 
-  // Fetch boards when API method is active
   useEffect(() => {
-    if (method !== "api" || !apiConnected) return;
     let cancelled = false;
-    setBoardsLoading(true);
     fetch("/api/pinterest/boards")
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
         if (Array.isArray(data.boards)) {
           setBoards(data.boards);
-          if (data.boards.length > 0 && !boardId) {
+          if (data.boards.length > 0) {
             setBoardId(data.boards[0].id);
           }
         }
@@ -83,7 +68,7 @@ export function PinComposer({ apiConnected, cookieConfigured }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [method, apiConnected, boardId]);
+  }, []);
 
   const titleLen = title.length;
   const descLen = description.length;
@@ -108,45 +93,27 @@ export function PinComposer({ apiConnected, cookieConfigured }: Props) {
       setError(`Description is ${descLen}/500 characters.`);
       return;
     }
-    if (method === "api" && !boardId) {
+    if (!boardId) {
       setError("Pick a board from your Pinterest account.");
-      return;
-    }
-    if (method === "fallback" && !boardName.trim()) {
-      setError("Board name is required for the fallback path.");
       return;
     }
 
     setPosting(true);
     try {
-      const payload =
-        method === "api"
-          ? {
-              method,
-              imageUrl: imageUrl.trim(),
-              title: title.trim(),
-              description: description.trim(),
-              boardId,
-              ...(destinationUrl.trim() && {
-                destinationUrl: destinationUrl.trim(),
-              }),
-              ...(altText.trim() && { altText: altText.trim() }),
-            }
-          : {
-              method,
-              imageUrl: imageUrl.trim(),
-              title: title.trim(),
-              description: description.trim(),
-              boardName: boardName.trim(),
-              ...(destinationUrl.trim() && {
-                destinationUrl: destinationUrl.trim(),
-              }),
-            };
-
       const res = await fetch("/api/pinterest/pin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          method: "api",
+          imageUrl: imageUrl.trim(),
+          title: title.trim(),
+          description: description.trim(),
+          boardId,
+          ...(destinationUrl.trim() && {
+            destinationUrl: destinationUrl.trim(),
+          }),
+          ...(altText.trim() && { altText: altText.trim() }),
+        }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -156,7 +123,6 @@ export function PinComposer({ apiConnected, cookieConfigured }: Props) {
         return;
       }
       setSuccess({
-        method: body.method,
         pinId: body.pinId,
         pinUrl: body.pinUrl ?? null,
       });
@@ -173,69 +139,13 @@ export function PinComposer({ apiConnected, cookieConfigured }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Method indicator */}
-      <Card
-        className={
-          method === "api"
-            ? "border-green-500/40 bg-green-500/[0.03]"
-            : "border-amber-500/40 bg-amber-500/[0.03]"
-        }
-      >
-        <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
-          <div className="flex items-center gap-2 text-sm">
-            {method === "api" ? (
-              <>
-                <ShieldCheck className="h-4 w-4 text-green-600" />
-                <span>
-                  Publishing via{" "}
-                  <span className="font-medium">Official Pinterest API</span>
-                </span>
-              </>
-            ) : (
-              <>
-                <AlertCircle className="h-4 w-4 text-amber-600" />
-                <span>
-                  Publishing via{" "}
-                  <span className="font-medium">Cookie Fallback</span> —
-                  internal testing only
-                </span>
-              </>
-            )}
-          </div>
-          {apiConnected && cookieConfigured && (
-            <div className="flex gap-1 text-xs">
-              <button
-                type="button"
-                onClick={() => setMethod("api")}
-                className={`rounded px-2 py-1 ${
-                  method === "api"
-                    ? "bg-foreground text-background"
-                    : "border hover:bg-muted"
-                }`}
-              >
-                API
-              </button>
-              <button
-                type="button"
-                onClick={() => setMethod("fallback")}
-                className={`rounded px-2 py-1 ${
-                  method === "fallback"
-                    ? "bg-foreground text-background"
-                    : "border hover:bg-muted"
-                }`}
-              >
-                Fallback
-              </button>
-            </div>
-          )}
-          {!apiConnected && (
-            <Link
-              href="/connections/pinterest"
-              className="text-xs underline text-muted-foreground hover:text-foreground"
-            >
-              Connect Official API
-            </Link>
-          )}
+      <Card className="border-green-500/40 bg-green-500/[0.03]">
+        <CardContent className="flex items-center gap-2 py-4 text-sm">
+          <ShieldCheck className="h-4 w-4 text-green-600" />
+          <span>
+            Publishing via the{" "}
+            <span className="font-medium">Official Pinterest API</span>
+          </span>
         </CardContent>
       </Card>
 
@@ -246,8 +156,8 @@ export function PinComposer({ apiConnected, cookieConfigured }: Props) {
             New pin
           </CardTitle>
           <CardDescription>
-            Each pin requires explicit human approval — no bulk posting, no
-            scheduled auto-publishing.
+            Each pin requires explicit human approval — one pin at a time, no
+            bulk posting, no scheduled auto-publishing.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -324,43 +234,30 @@ export function PinComposer({ apiConnected, cookieConfigured }: Props) {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="board">Board</Label>
-              {method === "api" ? (
-                <Select value={boardId} onValueChange={setBoardId}>
-                  <SelectTrigger id="board">
-                    <SelectValue
-                      placeholder={boardsLoading ? "Loading…" : "Select a board"}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {boards.length === 0 && !boardsLoading && (
-                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                        No boards found
-                      </div>
-                    )}
-                    {boards.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name}
-                        {b.privacy === "SECRET" && (
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            (secret)
-                          </span>
-                        )}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Input
-                  id="board"
-                  placeholder="Wedding inspo"
-                  value={boardName}
-                  onChange={(e) => {
-                    setBoardName(e.target.value);
-                    setError(null);
-                  }}
-                  maxLength={100}
-                />
-              )}
+              <Select value={boardId} onValueChange={setBoardId}>
+                <SelectTrigger id="board">
+                  <SelectValue
+                    placeholder={boardsLoading ? "Loading…" : "Select a board"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {boards.length === 0 && !boardsLoading && (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                      No boards found
+                    </div>
+                  )}
+                  {boards.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name}
+                      {b.privacy === "SECRET" && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          (secret)
+                        </span>
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="destination-url">Destination URL (optional)</Label>
@@ -377,25 +274,27 @@ export function PinComposer({ apiConnected, cookieConfigured }: Props) {
             </div>
           </div>
 
-          {method === "api" && (
-            <div className="space-y-2">
-              <Label htmlFor="alt-text">Alt text (accessibility, optional)</Label>
-              <Input
-                id="alt-text"
-                placeholder="What the image shows, for screen readers"
-                value={altText}
-                onChange={(e) => setAltText(e.target.value)}
-                maxLength={500}
-              />
-            </div>
-          )}
+          <div className="space-y-2">
+            <Label htmlFor="alt-text">Alt text (accessibility, optional)</Label>
+            <Input
+              id="alt-text"
+              placeholder="What the image shows, for screen readers"
+              value={altText}
+              onChange={(e) => setAltText(e.target.value)}
+              maxLength={500}
+            />
+          </div>
 
           <div className="rounded-md border border-muted bg-muted/30 p-3 text-xs text-muted-foreground">
             <p className="mb-1 font-medium text-foreground">Safety guarantees</p>
             <ul className="space-y-0.5">
               <li>• One pin per submission. No bulk publishing.</li>
               <li>• No scheduled auto-posting from this page.</li>
-              <li>• A human must click <span className="font-medium">Publish pin</span> for anything to be sent.</li>
+              <li>
+                • A human must click{" "}
+                <span className="font-medium">Publish pin</span> for anything
+                to be sent.
+              </li>
               <li>• Every API call is logged in /pinterest/logs for audit.</li>
             </ul>
           </div>
@@ -407,13 +306,7 @@ export function PinComposer({ apiConnected, cookieConfigured }: Props) {
           )}
           {success && (
             <div className="rounded-md bg-green-500/10 p-3 text-sm text-green-700 dark:text-green-400">
-              Pin published via{" "}
-              <span className="font-medium">
-                {success.method === "pinterest_api"
-                  ? "Official API"
-                  : "Cookie Fallback"}
-              </span>
-              .{" "}
+              Pin published.{" "}
               {success.pinUrl ? (
                 <a
                   href={success.pinUrl}

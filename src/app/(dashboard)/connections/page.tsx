@@ -130,19 +130,12 @@ export default async function ConnectionsHubPage() {
       ? "Setup incomplete"
       : "Not connected";
 
-  // Pinterest status
+  // Pinterest status — uses the Official Pinterest API exclusively in the UI
   const pinHasOAuth = !!pinConn?.accessToken && pinConn.status === "active";
-  const pinHasCookie = !!pinConn?.pinterestCookie;
   const pinStatus: PlatformCardProps["status"] = pinHasOAuth
     ? "connected"
-    : pinHasCookie
-      ? "partial"
-      : "disconnected";
-  const pinStatusLabel = pinHasOAuth
-    ? "API Connected"
-    : pinHasCookie
-      ? "Fallback only"
-      : "Not connected";
+    : "disconnected";
+  const pinStatusLabel = pinHasOAuth ? "API Connected" : "Not connected";
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -186,22 +179,24 @@ export default async function ConnectionsHubPage() {
           status={pinStatus}
           statusLabel={pinStatusLabel}
           details={
-            pinConn?.accountHandle
+            pinConn?.accountHandle && pinHasOAuth
               ? `@${pinConn.accountHandle}`
               : "Not connected"
           }
           bullets={[
-            { label: "Official API (production)", ok: pinHasOAuth },
-            { label: "Cookie fallback (internal only)", ok: pinHasCookie },
+            { label: "Official Pinterest API (OAuth)", ok: pinHasOAuth },
+            {
+              label: "Trial Access — Standard Access pending",
+              ok: pinHasOAuth,
+            },
+            { label: "Human-controlled publishing, one pin at a time", ok: true },
           ]}
           primaryHref="/connections/pinterest"
           primaryLabel={
             pinStatus === "disconnected" ? "Connect Pinterest" : "Manage"
           }
-          secondaryHref={pinHasOAuth || pinHasCookie ? "/pinterest" : undefined}
-          secondaryLabel={
-            pinHasOAuth || pinHasCookie ? "Open Pinterest" : undefined
-          }
+          secondaryHref={pinHasOAuth ? "/pinterest" : undefined}
+          secondaryLabel={pinHasOAuth ? "Open Pinterest" : undefined}
         />
       </div>
 

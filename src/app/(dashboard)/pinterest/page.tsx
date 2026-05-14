@@ -5,7 +5,7 @@ import { getCurrentBrand } from "@/lib/brand-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PinterestMethodStatus } from "@/components/connections/pinterest-method-status";
-import { Pin, Plus, Cookie, ShieldCheck, AlertCircle, FileText } from "lucide-react";
+import { Pin, Plus, LogIn, ShieldCheck, FileText } from "lucide-react";
 
 export const metadata = { title: "Pinterest - Xponential" };
 
@@ -19,18 +19,19 @@ export default async function PinterestPage() {
       accountHandle: true,
       accessToken: true,
       status: true,
-      pinterestCookie: true,
     },
   });
 
   const apiConnected =
     !!connection?.accessToken && connection.status === "active";
-  const cookieConfigured = !!connection?.pinterestCookie;
-  const anyConnection = apiConnected || cookieConfigured;
 
-  const pins = anyConnection
+  const pins = apiConnected
     ? await prisma.postHistory.findMany({
-        where: { brandId: brand.id, platform: "pinterest" },
+        where: {
+          brandId: brand.id,
+          platform: "pinterest",
+          postingMethod: "pinterest_api",
+        },
         orderBy: { postedAt: "desc" },
         take: 30,
         select: {
@@ -39,7 +40,6 @@ export default async function PinterestPage() {
           imageUrl: true,
           platformPostId: true,
           postedAt: true,
-          postingMethod: true,
         },
       })
     : [];
@@ -53,7 +53,7 @@ export default async function PinterestPage() {
             Pinterest
           </h1>
           <p className="text-muted-foreground">
-            {anyConnection ? (
+            {apiConnected ? (
               <>
                 Connected as{" "}
                 <span className="font-medium text-foreground">
@@ -72,7 +72,7 @@ export default async function PinterestPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          {anyConnection && (
+          {apiConnected && (
             <Link href="/pinterest/logs">
               <Button variant="outline">
                 <FileText className="mr-2 h-4 w-4" />
@@ -80,7 +80,7 @@ export default async function PinterestPage() {
               </Button>
             </Link>
           )}
-          {anyConnection ? (
+          {apiConnected ? (
             <Link href="/pinterest/compose">
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
@@ -90,7 +90,7 @@ export default async function PinterestPage() {
           ) : (
             <Link href="/connections/pinterest">
               <Button>
-                <Cookie className="mr-2 h-4 w-4" />
+                <LogIn className="mr-2 h-4 w-4" />
                 Connect Pinterest
               </Button>
             </Link>
@@ -98,15 +98,12 @@ export default async function PinterestPage() {
         </div>
       </div>
 
-      <PinterestMethodStatus
-        apiConnected={apiConnected}
-        cookieConfigured={cookieConfigured}
-      />
+      <PinterestMethodStatus apiConnected={apiConnected} />
 
-      {anyConnection && pins.length === 0 && (
+      {apiConnected && pins.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            No pins yet. Compose your first one.
+            No pins published yet. Compose your first one.
           </CardContent>
         </Card>
       )}
@@ -128,21 +125,12 @@ export default async function PinterestPage() {
                     no image
                   </div>
                 )}
-                {pin.postingMethod && (
-                  <div className="absolute right-1 top-1">
-                    {pin.postingMethod === "pinterest_api" ? (
-                      <span className="flex items-center gap-1 rounded bg-green-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white">
-                        <ShieldCheck className="h-3 w-3" />
-                        API
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 rounded bg-amber-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white">
-                        <AlertCircle className="h-3 w-3" />
-                        Fallback
-                      </span>
-                    )}
-                  </div>
-                )}
+                <div className="absolute right-1 top-1">
+                  <span className="flex items-center gap-1 rounded bg-green-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                    <ShieldCheck className="h-3 w-3" />
+                    API
+                  </span>
+                </div>
               </div>
               <CardContent className="space-y-1 p-3">
                 <p className="text-xs text-muted-foreground">
