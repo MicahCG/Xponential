@@ -115,6 +115,11 @@ enum ConnectionStatus {
   revoked
 }
 
+enum OriginalPostsMode {
+  manual
+  auto
+}
+
 model OAuthState {
   id           String   @id @default(cuid())
   state        String   @unique
@@ -142,6 +147,12 @@ model PlatformConnection {
   connectedAt    DateTime         @default(now()) @map("connected_at")
   tokenExpires   DateTime?        @map("token_expires")
   status         ConnectionStatus @default(active)
+
+  // X-specific: original-post autopilot settings (unused for non-X platforms)
+  originalPostsEnabled    Boolean           @default(false) @map("original_posts_enabled")
+  originalPostsMode       OriginalPostsMode @default(manual) @map("original_posts_mode")
+  originalPostsPerDay     Int               @default(2) @map("original_posts_per_day")
+  originalPostsTopicFocus String[]          @default([]) @map("original_posts_topic_focus")
 
   user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   brand               Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
