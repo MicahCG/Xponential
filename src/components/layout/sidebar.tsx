@@ -14,11 +14,13 @@ import {
   Clapperboard,
   BarChart2,
   Pin,
+  Link as LinkIcon,
 } from "lucide-react";
 import { BrandSwitcher, type BrandSummary } from "@/components/layout/brand-switcher";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/connections", label: "Connections", icon: LinkIcon },
   { href: "/content", label: "Auto-Replies", icon: MessageSquareReply },
   { href: "/personality", label: "Personality", icon: Brain },
   { href: "/video", label: "Video Studio", icon: Clapperboard },
