@@ -134,8 +134,8 @@ export async function POST(request: NextRequest) {
     // Check if already exists
     const existing = await prisma.watchedAccount.findUnique({
       where: {
-        userId_platform_accountHandle: {
-          userId: session.user.id,
+        brandId_platform_accountHandle: {
+          brandId: brand.id,
           platform: "x",
           accountHandle: handle,
         },

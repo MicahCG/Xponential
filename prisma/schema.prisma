@@ -132,7 +132,7 @@ model OAuthState {
 model PlatformConnection {
   id             String           @id @default(cuid())
   userId         String           @map("user_id")
-  brandId        String?          @map("brand_id")
+  brandId        String           @map("brand_id")
   platform       Platform
   accessToken    String           @map("access_token") @db.Text
   refreshToken   String?          @map("refresh_token") @db.Text
@@ -144,11 +144,11 @@ model PlatformConnection {
   status         ConnectionStatus @default(active)
 
   user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  brand               Brand?               @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand               Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
   personalityProfiles PersonalityProfile[]
   watchedAccounts     WatchedAccount[]
 
-  @@unique([userId, platform, accountId])
+  @@unique([brandId, platform, accountId])
   @@index([brandId, platform])
   @@map("platform_connections")
 }
@@ -164,7 +164,7 @@ enum PersonalityMethod {
 model PersonalityProfile {
   id                   String            @id @default(cuid())
   userId               String            @map("user_id")
-  brandId              String?           @map("brand_id")
+  brandId              String            @map("brand_id")
   platformConnectionId String?           @map("platform_connection_id")
   method               PersonalityMethod
   rawInput             Json?             @map("raw_input")
@@ -176,7 +176,7 @@ model PersonalityProfile {
   updatedAt            DateTime          @updatedAt @map("updated_at")
 
   user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  brand              Brand?              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand              Brand               @relation(fields: [brandId], references: [id], onDelete: Cascade)
   platformConnection PlatformConnection? @relation(fields: [platformConnectionId], references: [id], onDelete: SetNull)
 
   @@index([brandId, isActive])
@@ -198,7 +198,7 @@ enum Barrel {
 model PostHistory {
   id               String    @id @default(cuid())
   userId           String    @map("user_id")
-  brandId          String?   @map("brand_id")
+  brandId          String    @map("brand_id")
   platform         Platform
   postType         PostType  @map("post_type")
   barrel           Barrel    @default(original)
@@ -213,8 +213,8 @@ model PostHistory {
   engagement       Json      @default("{}")
   metricsUpdatedAt DateTime? @map("metrics_updated_at")
 
-  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  brand Brand? @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   @@index([userId, platform, postedAt])
   @@index([userId, targetAuthor])
@@ -232,7 +232,7 @@ enum QueueStatus {
 model ContentQueue {
   id           String      @id @default(cuid())
   userId       String      @map("user_id")
-  brandId      String?     @map("brand_id")
+  brandId      String      @map("brand_id")
   platform     Platform
   postType     PostType    @map("post_type")
   barrel       Barrel      @default(original)
@@ -244,8 +244,8 @@ model ContentQueue {
   createdAt    DateTime    @default(now()) @map("created_at")
   scheduledFor DateTime?   @map("scheduled_for")
 
-  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  brand Brand? @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   @@index([userId, status])
   @@index([brandId, status])
@@ -255,7 +255,7 @@ model ContentQueue {
 model WatchedAccount {
   id                   String   @id @default(cuid())
   userId               String   @map("user_id")
-  brandId              String?  @map("brand_id")
+  brandId              String   @map("brand_id")
   platformConnectionId String?  @map("platform_connection_id")
   platform             Platform
   accountHandle        String   @map("account_handle")
@@ -274,11 +274,11 @@ model WatchedAccount {
   createdAt            DateTime @default(now()) @map("created_at")
 
   user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  brand              Brand?              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand              Brand               @relation(fields: [brandId], references: [id], onDelete: Cascade)
   platformConnection PlatformConnection? @relation(fields: [platformConnectionId], references: [id], onDelete: SetNull)
   autoReplyLogs      AutoReplyLog[]
 
-  @@unique([userId, platform, accountHandle])
+  @@unique([brandId, platform, accountHandle])
   @@index([brandId, platform])
   @@map("watched_accounts")
 }
@@ -286,7 +286,7 @@ model WatchedAccount {
 model ContentLearning {
   id            String   @id @default(cuid())
   userId        String   @map("user_id")
-  brandId       String?  @map("brand_id")
+  brandId       String   @map("brand_id")
   date          DateTime @db.Date
   platform      Platform
   insights      Json
@@ -294,11 +294,10 @@ model ContentLearning {
   postsAnalyzed Int      @default(0) @map("posts_analyzed")
   createdAt     DateTime @default(now()) @map("created_at")
 
-  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  brand Brand? @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, platform, date])
-  @@index([userId, platform, date])
+  @@unique([brandId, platform, date])
   @@index([brandId, platform, date])
   @@map("content_learnings")
 }
@@ -306,13 +305,13 @@ model ContentLearning {
 model FollowerSnapshot {
   id          String   @id @default(cuid())
   userId      String   @map("user_id")
-  brandId     String?  @map("brand_id")
+  brandId     String   @map("brand_id")
   platform    Platform
   followers   Int
   capturedAt  DateTime @default(now()) @map("captured_at")
 
-  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  brand Brand? @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   @@index([userId, platform, capturedAt])
   @@index([brandId, platform, capturedAt])
@@ -322,7 +321,7 @@ model FollowerSnapshot {
 model AutoReplyLog {
   id               String    @id @default(cuid())
   userId           String    @map("user_id")
-  brandId          String?   @map("brand_id")
+  brandId          String    @map("brand_id")
   watchedAccountId String    @map("watched_account_id")
   targetTweetId    String    @map("target_tweet_id")
   targetTweetText  String    @map("target_tweet_text") @db.Text
@@ -342,7 +341,7 @@ model AutoReplyLog {
   postedAt            DateTime? @map("posted_at")
 
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  brand          Brand?         @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand          Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
   watchedAccount WatchedAccount @relation(fields: [watchedAccountId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
@@ -353,7 +352,7 @@ model AutoReplyLog {
 model VideoPost {
   id                  String    @id @default(cuid())
   userId              String    @map("user_id")
-  brandId             String?   @map("brand_id")
+  brandId             String    @map("brand_id")
   tweetText           String    @map("tweet_text") @db.Text
   videoPrompt         String    @map("video_prompt") @db.Text
   movieRootId         String?   @map("movie_root_id")
@@ -366,8 +365,8 @@ model VideoPost {
   createdAt           DateTime  @default(now()) @map("created_at")
   postedAt            DateTime? @map("posted_at")
 
-  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  brand Brand? @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   @@index([userId, status])
   @@index([brandId, status])

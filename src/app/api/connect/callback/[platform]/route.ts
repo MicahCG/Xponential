@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import * as xOAuth from "@/lib/oauth/x";
 import { getUserProfile as getXProfile } from "@/lib/platform/x-client";
+import { getDefaultBrandForUser } from "@/lib/brand-context";
 
 export async function GET(
   request: NextRequest,
@@ -42,7 +43,9 @@ export async function GET(
   }
 
   const userId = oauthState.userId;
-  const brandId = oauthState.brandId;
+  // Fallback for legacy OAuthState rows started before brandId was captured
+  const brandId =
+    oauthState.brandId ?? (await getDefaultBrandForUser(userId)).id;
   const returnTo = oauthState.returnTo;
 
   // Delete the state record (single-use)

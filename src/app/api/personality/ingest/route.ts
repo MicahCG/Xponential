@@ -149,8 +149,8 @@ export async function POST(request: Request) {
     for (const account of allAccounts) {
       await prisma.watchedAccount.upsert({
         where: {
-          userId_platform_accountHandle: {
-            userId: account.userId,
+          brandId_platform_accountHandle: {
+            brandId: account.brandId,
             platform: account.platform,
             accountHandle: account.accountHandle,
           },

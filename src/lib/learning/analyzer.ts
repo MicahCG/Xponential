@@ -205,7 +205,7 @@ export async function runDailyLearning(): Promise<DailyLearningResult> {
   // Group by userId + platform (brandId rides along so the upsert can write it)
   const byUserPlatform = new Map<
     string,
-    { userId: string; brandId: string | null; platform: Platform; posts: PostWithMetrics[] }
+    { userId: string; brandId: string; platform: Platform; posts: PostWithMetrics[] }
   >();
 
   for (const post of posts) {
@@ -244,10 +244,10 @@ export async function runDailyLearning(): Promise<DailyLearningResult> {
       const analysis = await analyzeUserPosts(userId, platform, sorted);
       if (!analysis) continue;
 
-      // Upsert: one record per user/platform/day
+      // Upsert: one record per brand/platform/day
       await prisma.contentLearning.upsert({
         where: {
-          userId_platform_date: { userId, platform, date: analysisDate },
+          brandId_platform_date: { brandId, platform, date: analysisDate },
         },
         update: {
           insights: analysis.insights as object[],
