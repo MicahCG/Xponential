@@ -7,9 +7,9 @@ export interface TrendingTopic {
 }
 
 interface FetchOptions {
-  /** Apify region/country for trends. Defaults to "United States". */
+  /** Country code for the actor's input (actor-specific format, often a numeric string). */
   country?: string;
-  /** Maximum number of topics to return. */
+  /** Maximum number of topics to return after normalization. */
   limit?: number;
   /** Timeout for the Apify run, seconds. */
   timeoutSec?: number;
@@ -43,14 +43,32 @@ export async function fetchXTrending(opts: FetchOptions = {}): Promise<TrendingT
     return [];
   }
 
-  const { country = "United States", limit = 25, timeoutSec = 60 } = opts;
+  const country = opts.country ?? process.env.APIFY_X_TRENDING_COUNTRY ?? "2";
+  const { limit = 25, timeoutSec = 90 } = opts;
+
+  // Matches the input schema for actor oCAEibQtPGKXcF5MM (live X trending).
+  // Override APIFY_X_TRENDING_INPUT (JSON string) to swap actors with a different schema.
+  const defaultInput = {
+    country,
+    live: true,
+    hour1: false,
+    hour3: false,
+    hour6: false,
+    hour12: false,
+    hour24: false,
+    day2: false,
+    day3: false,
+    proxyOptions: { useApifyProxy: true },
+  };
+  const inputOverride = process.env.APIFY_X_TRENDING_INPUT;
+  const actorInput = inputOverride ? JSON.parse(inputOverride) : defaultInput;
 
   try {
     const runUrl = `${APIFY_API_BASE}/acts/${actorId}/runs?token=${token}&waitForFinish=${timeoutSec}`;
     const runResponse = await fetch(runUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ country, location: country, limit, maxItems: limit }),
+      body: JSON.stringify(actorInput),
     });
 
     if (!runResponse.ok) {
