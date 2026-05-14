@@ -111,6 +111,7 @@ async function ensureFreshToken(conn: ConnectionWithTokens): Promise<string> {
       accessToken: refreshed.access_token,
       refreshToken: refreshed.refresh_token,
       tokenExpires: new Date(Date.now() + refreshed.expires_in * 1000),
+      scopes: refreshed.scope,
     },
   });
 
