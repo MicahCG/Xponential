@@ -27,10 +27,14 @@ export async function POST() {
     );
   }
 
+  const startedAt = new Date();
   try {
     const all = await listBoards(conn);
     return NextResponse.json({
       ok: true,
+      endpoint: "GET /v5/boards",
+      statusCode: 200,
+      ranAt: startedAt.toISOString(),
       totalBoards: all.length,
       sample: all.slice(0, 5).map((b) => ({
         id: b.id,
@@ -42,12 +46,21 @@ export async function POST() {
   } catch (err) {
     if (err instanceof PinterestApiError) {
       return NextResponse.json(
-        { error: err.message, httpCode: err.httpCode },
+        {
+          error: err.message,
+          endpoint: "GET /v5/boards",
+          statusCode: err.httpCode,
+          ranAt: startedAt.toISOString(),
+        },
         { status: err.isAuthError ? 401 : 502 }
       );
     }
     return NextResponse.json(
-      { error: "Failed to fetch boards." },
+      {
+        error: "Failed to fetch boards.",
+        endpoint: "GET /v5/boards",
+        ranAt: startedAt.toISOString(),
+      },
       { status: 500 }
     );
   }

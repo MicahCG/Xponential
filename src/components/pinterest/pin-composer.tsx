@@ -20,7 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Pin, ShieldCheck, Send } from "lucide-react";
+import Link from "next/link";
+import { Loader2, Pin, ShieldCheck, Send, CheckCircle2, XCircle, Clock, FileText } from "lucide-react";
 
 interface Board {
   id: string;
@@ -44,9 +45,14 @@ export function PinComposer() {
 
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<{
-    pinId: string;
-    pinUrl: string | null;
+  const [publishResult, setPublishResult] = useState<{
+    ok: boolean;
+    endpoint: string;
+    statusCode: number | null;
+    message: string;
+    pinId?: string;
+    pinUrl?: string | null;
+    ranAt: string;
   } | null>(null);
 
   useEffect(() => {
@@ -76,7 +82,7 @@ export function PinComposer() {
 
   async function submit() {
     setError(null);
-    setSuccess(null);
+    setPublishResult(null);
     if (!imageUrl.trim() || !imageValid) {
       setError("Image URL must be a public http(s) URL.");
       return;
@@ -99,6 +105,7 @@ export function PinComposer() {
     }
 
     setPosting(true);
+    const ranAt = new Date().toISOString();
     try {
       const res = await fetch("/api/pinterest/pin", {
         method: "POST",
@@ -116,15 +123,29 @@ export function PinComposer() {
         }),
       });
       const body = await res.json().catch(() => ({}));
+
       if (!res.ok) {
-        setError(
-          typeof body.error === "string" ? body.error : "Failed to publish pin."
-        );
+        setPublishResult({
+          ok: false,
+          endpoint: body.endpoint ?? "POST /v5/pins",
+          statusCode: body.statusCode ?? res.status,
+          message:
+            typeof body.error === "string"
+              ? body.error
+              : "Failed to publish pin.",
+          ranAt,
+        });
         return;
       }
-      setSuccess({
+
+      setPublishResult({
+        ok: true,
+        endpoint: body.endpoint ?? "POST /v5/pins",
+        statusCode: body.statusCode ?? 200,
+        message: "Pin published successfully via the Official Pinterest API.",
         pinId: body.pinId,
         pinUrl: body.pinUrl ?? null,
+        ranAt,
       });
       setImageUrl("");
       setTitle("");
@@ -146,6 +167,18 @@ export function PinComposer() {
             Publishing via the{" "}
             <span className="font-medium">Official Pinterest API</span>
           </span>
+        </CardContent>
+      </Card>
+
+      <Card className="border-amber-500/30 bg-amber-500/[0.03]">
+        <CardContent className="flex gap-2 py-3 text-xs text-muted-foreground">
+          <Clock className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <p>
+            This app is currently using Pinterest{" "}
+            <span className="font-medium text-foreground">Trial Access</span>.
+            Standard Access is requested for production publishing through
+            Pinterest&apos;s official API.
+          </p>
         </CardContent>
       </Card>
 
@@ -198,7 +231,7 @@ export function PinComposer() {
             </Label>
             <Input
               id="title"
-              placeholder="Cozy autumn living room ideas"
+              placeholder="Eco Wedding Table Decor With Natural Candles and Linen"
               value={title}
               onChange={(e) => {
                 setTitle(e.target.value);
@@ -221,7 +254,7 @@ export function PinComposer() {
             </Label>
             <Textarea
               id="description"
-              placeholder="SEO-friendly description with relevant keywords…"
+              placeholder="A warm, eco-conscious wedding table idea with soft candlelight, natural linens, and rustic details for an intimate reception."
               value={description}
               onChange={(e) => {
                 setDescription(e.target.value);
@@ -263,7 +296,7 @@ export function PinComposer() {
             <Label htmlFor="destination-url">Destination URL (optional)</Label>
             <Input
               id="destination-url"
-              placeholder="https://your-affiliate-link.com/…"
+              placeholder="https://www.ecoshopguide.com"
               value={destinationUrl}
               onChange={(e) => {
                 setDestinationUrl(e.target.value);
@@ -277,7 +310,7 @@ export function PinComposer() {
             <Label htmlFor="alt-text">Alt text (accessibility, optional)</Label>
             <Input
               id="alt-text"
-              placeholder="What the image shows, for screen readers"
+              placeholder="Eco-friendly wedding table with candles, linen runner, and natural floral decor."
               value={altText}
               onChange={(e) => setAltText(e.target.value)}
               maxLength={500}
@@ -303,21 +336,65 @@ export function PinComposer() {
               {error}
             </div>
           )}
-          {success && (
-            <div className="rounded-md bg-green-500/10 p-3 text-sm text-green-700 dark:text-green-400">
-              Pin published.{" "}
-              {success.pinUrl ? (
-                <a
-                  href={success.pinUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline"
+          {publishResult && (
+            <div
+              className={
+                "rounded-md border p-3 text-sm " +
+                (publishResult.ok
+                  ? "border-green-500/30 bg-green-500/[0.05]"
+                  : "border-destructive/30 bg-destructive/[0.05]")
+              }
+            >
+              <div
+                className={
+                  "mb-2 flex items-center gap-2 font-medium " +
+                  (publishResult.ok
+                    ? "text-green-700 dark:text-green-400"
+                    : "text-destructive")
+                }
+              >
+                {publishResult.ok ? (
+                  <CheckCircle2 className="h-4 w-4" />
+                ) : (
+                  <XCircle className="h-4 w-4" />
+                )}
+                {publishResult.message}
+              </div>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                <dt>Endpoint</dt>
+                <dd>
+                  <code>{publishResult.endpoint}</code>
+                </dd>
+                <dt>Status</dt>
+                <dd>{publishResult.statusCode ?? "—"}</dd>
+                <dt>Run at</dt>
+                <dd>{new Date(publishResult.ranAt).toLocaleString()}</dd>
+                {publishResult.pinId && (
+                  <>
+                    <dt>Pin ID</dt>
+                    <dd className="font-mono">{publishResult.pinId}</dd>
+                  </>
+                )}
+              </dl>
+              <div className="mt-3 flex flex-wrap gap-3 text-xs">
+                {publishResult.ok && publishResult.pinUrl && (
+                  <a
+                    href={publishResult.pinUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    Open on Pinterest →
+                  </a>
+                )}
+                <Link
+                  href="/pinterest/logs"
+                  className="inline-flex items-center gap-1 underline"
                 >
-                  Open on Pinterest
-                </a>
-              ) : (
-                <code className="text-xs">id={success.pinId}</code>
-              )}
+                  <FileText className="h-3 w-3" />
+                  View API logs
+                </Link>
+              </div>
             </div>
           )}
 

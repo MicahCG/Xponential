@@ -86,13 +86,16 @@ export async function POST(request: NextRequest) {
         pinId: result.id,
         pinUrl: result.link,
         historyId: record.id,
+        endpoint: "POST /v5/pins",
+        statusCode: 200,
       });
     } catch (err) {
       if (err instanceof PinterestApiError) {
         return NextResponse.json(
           {
             error: err.message,
-            httpCode: err.httpCode,
+            endpoint: "POST /v5/pins",
+            statusCode: err.httpCode,
             responseBody: err.responseBody,
           },
           { status: err.isAuthError ? 401 : 502 }
@@ -100,7 +103,10 @@ export async function POST(request: NextRequest) {
       }
       console.error("[pinterest/pin] API path unexpected error:", err);
       return NextResponse.json(
-        { error: "Unexpected error from Pinterest API path." },
+        {
+          error: "Unexpected error from Pinterest API path.",
+          endpoint: "POST /v5/pins",
+        },
         { status: 500 }
       );
     }
