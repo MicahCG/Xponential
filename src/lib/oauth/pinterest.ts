@@ -3,8 +3,18 @@ import crypto from "crypto";
 const PINTEREST_AUTH_URL = "https://www.pinterest.com/oauth/";
 const PINTEREST_TOKEN_URL = "https://api.pinterest.com/v5/oauth/token";
 
-// Scopes required for the demo + production posting flow
+// Read-only scopes for initial OAuth verification.
+// Once a read-only handshake succeeds end-to-end, add "boards:write,pins:write"
+// to enable publishing — Pinterest sometimes rejects auth URLs that request
+// write scopes before the app's access tier is approved for them.
 const SCOPES = [
+  "user_accounts:read",
+  "boards:read",
+  "pins:read",
+];
+
+// Full scope set for production posting — request these AFTER read-only works.
+export const SCOPES_WITH_WRITE = [
   "user_accounts:read",
   "boards:read",
   "pins:read",

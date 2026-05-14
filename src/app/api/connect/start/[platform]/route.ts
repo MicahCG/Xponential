@@ -50,16 +50,26 @@ export async function GET(
 
   if (platform === "pinterest") {
     const clientId = process.env.PINTEREST_CLIENT_ID;
+    const clientSecretConfigured = !!process.env.PINTEREST_CLIENT_SECRET;
     const redirectUri = process.env.PINTEREST_CALLBACK_URL;
-    if (!clientId || !redirectUri) {
+
+    if (!clientId || !redirectUri || !clientSecretConfigured) {
+      const missing = [
+        !clientId && "PINTEREST_CLIENT_ID",
+        !clientSecretConfigured && "PINTEREST_CLIENT_SECRET",
+        !redirectUri && "PINTEREST_CALLBACK_URL",
+      ]
+        .filter(Boolean)
+        .join(", ");
+      console.error(`[pinterest-oauth] Missing env vars: ${missing}`);
       return NextResponse.json(
         {
-          error:
-            "Pinterest OAuth is not configured. Set PINTEREST_CLIENT_ID and PINTEREST_CALLBACK_URL in env.",
+          error: `Pinterest OAuth is not configured. Missing env: ${missing}`,
         },
         { status: 500 }
       );
     }
+
     const state = pinterestOAuth.generateState();
 
     await prisma.oAuthState.create({
@@ -74,6 +84,21 @@ export async function GET(
     });
 
     const authUrl = pinterestOAuth.buildAuthUrl({ clientId, redirectUri, state });
+
+    // Server-side diagnostic log (no secret in the URL, so this is safe).
+    // Client secret is only used in the POST /v5/oauth/token exchange.
+    console.log("[pinterest-oauth] Authorization URL built:", {
+      clientId,
+      clientIdLength: clientId.length,
+      redirectUri,
+      redirectUriEncoded: encodeURIComponent(redirectUri),
+      responseType: "code",
+      scopes: pinterestOAuth.PINTEREST_OAUTH_SCOPES,
+      state,
+      authUrl,
+      secretConfigured: clientSecretConfigured,
+    });
+
     return NextResponse.redirect(authUrl);
   }
 
