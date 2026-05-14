@@ -23,12 +23,19 @@ export default function LoginPage() {
       <CardContent>
         <LoginForm />
       </CardContent>
-      <CardFooter className="justify-center">
+      <CardFooter className="flex flex-col items-center gap-2">
         <p className="text-sm text-muted-foreground">
           Don&apos;t have an account?{" "}
           <Link href="/register" className="text-primary underline-offset-4 hover:underline">
             Sign up
           </Link>
+        </p>
+        <p className="text-xs text-muted-foreground">
+          By signing in, you agree to our{" "}
+          <Link href="/privacy" className="underline underline-offset-4 hover:text-foreground">
+            Privacy Policy
+          </Link>
+          .
         </p>
       </CardFooter>
     </Card>

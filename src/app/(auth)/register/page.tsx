@@ -23,12 +23,19 @@ export default function RegisterPage() {
       <CardContent>
         <RegisterForm />
       </CardContent>
-      <CardFooter className="justify-center">
+      <CardFooter className="flex flex-col items-center gap-2">
         <p className="text-sm text-muted-foreground">
           Already have an account?{" "}
           <Link href="/login" className="text-primary underline-offset-4 hover:underline">
             Sign in
           </Link>
+        </p>
+        <p className="text-xs text-muted-foreground">
+          By signing up, you agree to our{" "}
+          <Link href="/privacy" className="underline underline-offset-4 hover:text-foreground">
+            Privacy Policy
+          </Link>
+          .
         </p>
       </CardFooter>
     </Card>

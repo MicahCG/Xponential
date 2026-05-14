@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAuth } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrand } from "@/lib/brand-context";
@@ -64,6 +65,17 @@ export default async function PinterestConnectPage() {
           tokenExpiresAt={connection?.tokenExpires ?? null}
           recentLogs={recentLogs}
         />
+
+        <p className="text-center text-xs text-muted-foreground">
+          Xponential&apos;s handling of Pinterest data is described in our{" "}
+          <Link
+            href="/privacy"
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            Privacy Policy
+          </Link>
+          .
+        </p>
       </div>
     );
   }
@@ -88,6 +100,18 @@ export default async function PinterestConnectPage() {
         tokenExpiresAt={null}
         brandName={brand.name}
       />
+
+      <p className="text-center text-xs text-muted-foreground">
+        Connecting Pinterest authorizes Xponential to publish pins on your
+        behalf, as described in our{" "}
+        <Link
+          href="/privacy"
+          className="underline underline-offset-2 hover:text-foreground"
+        >
+          Privacy Policy
+        </Link>
+        .
+      </p>
     </div>
   );
 }
