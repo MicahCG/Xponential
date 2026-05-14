@@ -121,6 +121,7 @@ export async function processVideoPosts() {
       await prisma.postHistory.create({
         data: {
           userId: post.userId,
+          brandId: post.brandId,
           platform: "x",
           postType: "original",
           content: post.tweetText,

@@ -189,6 +189,7 @@ export async function runDailyLearning(): Promise<DailyLearningResult> {
     select: {
       id: true,
       userId: true,
+      brandId: true,
       platform: true,
       postType: true,
       content: true,
@@ -201,13 +202,16 @@ export async function runDailyLearning(): Promise<DailyLearningResult> {
 
   if (posts.length === 0) return result;
 
-  // Group by userId + platform
-  const byUserPlatform = new Map<string, { userId: string; platform: Platform; posts: PostWithMetrics[] }>();
+  // Group by userId + platform (brandId rides along so the upsert can write it)
+  const byUserPlatform = new Map<
+    string,
+    { userId: string; brandId: string | null; platform: Platform; posts: PostWithMetrics[] }
+  >();
 
   for (const post of posts) {
     const key = `${post.userId}:${post.platform}`;
     if (!byUserPlatform.has(key)) {
-      byUserPlatform.set(key, { userId: post.userId, platform: post.platform, posts: [] });
+      byUserPlatform.set(key, { userId: post.userId, brandId: post.brandId, platform: post.platform, posts: [] });
     }
 
     const engagement = post.engagement as Record<string, number>;
@@ -228,7 +232,7 @@ export async function runDailyLearning(): Promise<DailyLearningResult> {
     });
   }
 
-  for (const { userId, platform, posts: userPosts } of byUserPlatform.values()) {
+  for (const { userId, brandId, platform, posts: userPosts } of byUserPlatform.values()) {
     result.usersProcessed++;
 
     // Sort by engagement score descending for the prompt
@@ -252,6 +256,7 @@ export async function runDailyLearning(): Promise<DailyLearningResult> {
         },
         create: {
           userId,
+          brandId,
           platform,
           date: analysisDate,
           insights: analysis.insights as object[],

@@ -42,6 +42,7 @@ export async function GET(
   }
 
   const userId = oauthState.userId;
+  const brandId = oauthState.brandId;
   const returnTo = oauthState.returnTo;
 
   // Delete the state record (single-use)
@@ -90,6 +91,7 @@ export async function GET(
         const created = await prisma.platformConnection.create({
           data: {
             userId,
+            brandId,
             platform: "x",
             accessToken: tokens.access_token,
             refreshToken: tokens.refresh_token,

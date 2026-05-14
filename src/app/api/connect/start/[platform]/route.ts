@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import * as xOAuth from "@/lib/oauth/x";
+import { getCurrentBrand } from "@/lib/brand-context";
 
 export async function GET(
   request: NextRequest,
@@ -13,6 +14,7 @@ export async function GET(
   }
 
   const { platform } = await params;
+  const brand = await getCurrentBrand(session.user.id);
 
   const returnTo = request.nextUrl.searchParams.get("returnTo") || null;
 
@@ -27,6 +29,7 @@ export async function GET(
       data: {
         state,
         userId: session.user.id,
+        brandId: brand.id,
         platform: "x",
         codeVerifier,
         returnTo,

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { postTweetWithRetry, XPostError } from "@/lib/platform/x-client";
 import { compressVideo } from "@/lib/video/compress";
+import { getCurrentBrand } from "@/lib/brand-context";
 
 export async function PUT(
   request: NextRequest,
@@ -16,6 +17,7 @@ export async function PUT(
       { status: 401 }
     );
   }
+  const brand = await getCurrentBrand(session.user.id);
 
   console.log(`[auto-reply approve] User ${session.user.id} attempting action`);
 
@@ -93,6 +95,7 @@ export async function PUT(
     await prisma.postHistory.create({
       data: {
         userId: session.user.id,
+        brandId: brand.id,
         platform,
         postType: "reply",
         content: contentToPost,

@@ -72,3 +72,18 @@ export const updateQueueItemSchema = z.object({
 export const publishContentSchema = z.object({
   queueItemId: z.string(),
 });
+
+// Brand validators
+export const createBrandSchema = z.object({
+  name: z.string().trim().min(1).max(50),
+  avatarUrl: z.string().url().max(500).optional(),
+});
+
+export const updateBrandSchema = z.object({
+  name: z.string().trim().min(1).max(50).optional(),
+  avatarUrl: z.string().url().max(500).nullable().optional(),
+});
+
+export const selectBrandSchema = z.object({
+  brandId: z.string().min(1),
+});

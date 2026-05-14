@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateContentSchema } from "@/lib/validators";
 import { generateContent } from "@/lib/content/generator";
+import { getCurrentBrand } from "@/lib/brand-context";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -10,6 +11,7 @@ export async function POST(request: NextRequest) {
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const brand = await getCurrentBrand(userId);
 
   const body = await request.json();
   const parsed = generateContentSchema.safeParse(body);
@@ -29,6 +31,7 @@ export async function POST(request: NextRequest) {
         prisma.contentQueue.create({
           data: {
             userId,
+            brandId: brand.id,
             platform: item.platform,
             postType: item.postType,
             barrel: "original",

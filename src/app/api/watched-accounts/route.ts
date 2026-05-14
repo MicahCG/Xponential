@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getValidAccessToken, getUsersByUsernames } from "@/lib/platform/x-client";
+import { getCurrentBrand } from "@/lib/brand-context";
 
 const MAX_ENABLED_ACCOUNTS = 25;
 
@@ -112,6 +113,7 @@ export async function POST(request: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const brand = await getCurrentBrand(session.user.id);
 
   const body = await request.json();
   const handle = body.handle?.replace("@", "").trim();
@@ -176,6 +178,7 @@ export async function POST(request: NextRequest) {
     const account = await prisma.watchedAccount.create({
       data: {
         userId: session.user.id,
+        brandId: brand.id,
         platform: "x",
         accountHandle: handle,
         accountId,

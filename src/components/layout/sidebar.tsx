@@ -11,10 +11,10 @@ import {
   MessageSquareReply,
   Settings,
   PanelLeftClose,
-  PanelLeftOpen,
   Clapperboard,
   BarChart2,
 } from "lucide-react";
+import { BrandSwitcher, type BrandSummary } from "@/components/layout/brand-switcher";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -25,7 +25,12 @@ const navItems = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  currentBrand: { id: string; name: string; slug: string };
+  brands: BrandSummary[];
+}
+
+export function Sidebar({ currentBrand, brands }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -66,6 +71,14 @@ export function Sidebar() {
             </button>
           </>
         )}
+      </div>
+
+      <div className={cn("border-b", collapsed ? "p-2" : "p-3")}>
+        <BrandSwitcher
+          currentBrand={currentBrand}
+          brands={brands}
+          collapsed={collapsed}
+        />
       </div>
 
       <nav className={cn("flex-1 space-y-1", collapsed ? "p-2" : "p-3")}>
