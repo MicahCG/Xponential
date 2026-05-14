@@ -106,6 +106,7 @@ model VerificationToken {
 
 enum Platform {
   x
+  pinterest
 }
 
 enum ConnectionStatus {
@@ -141,6 +142,7 @@ model PlatformConnection {
   accessToken    String           @map("access_token") @db.Text
   refreshToken   String?          @map("refresh_token") @db.Text
   twitterCookie  String?          @map("twitter_cookie") @db.Text
+  pinterestCookie String?         @map("pinterest_cookie") @db.Text
   accountHandle  String?          @map("account_handle")
   accountId      String?          @map("account_id")
   connectedAt    DateTime         @default(now()) @map("connected_at")
@@ -218,6 +220,7 @@ model PostHistory {
   targetPostContent String?  @map("target_post_content") @db.Text
   videoUrl         String?   @map("video_url")
   videoFormat      String?   @map("video_format")
+  imageUrl         String?   @map("image_url")
   platformPostId   String?   @map("platform_post_id")
   postedAt         DateTime  @default(now()) @map("posted_at")
   engagement       Json      @default("{}")

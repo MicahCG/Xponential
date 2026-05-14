@@ -13,6 +13,7 @@ import {
   PanelLeftClose,
   Clapperboard,
   BarChart2,
+  Pin,
 } from "lucide-react";
 import { BrandSwitcher, type BrandSummary } from "@/components/layout/brand-switcher";
 
@@ -21,6 +22,7 @@ const navItems = [
   { href: "/content", label: "Auto-Replies", icon: MessageSquareReply },
   { href: "/personality", label: "Personality", icon: Brain },
   { href: "/video", label: "Video Studio", icon: Clapperboard },
+  { href: "/pinterest", label: "Pinterest", icon: Pin },
   { href: "/analytics", label: "Analytics", icon: BarChart2 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
