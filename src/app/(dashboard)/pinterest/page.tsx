@@ -5,7 +5,7 @@ import { getCurrentBrand } from "@/lib/brand-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PinterestMethodStatus } from "@/components/connections/pinterest-method-status";
-import { Pin, Plus, LogIn, ShieldCheck, FileText } from "lucide-react";
+import { Pin, Plus, LogIn, ShieldCheck, FileText, Settings2 } from "lucide-react";
 
 export const metadata = { title: "Pinterest - Xponential" };
 
@@ -71,14 +71,22 @@ export default async function PinterestPage() {
             )}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {apiConnected && (
-            <Link href="/pinterest/logs">
-              <Button variant="outline">
-                <FileText className="mr-2 h-4 w-4" />
-                API logs
-              </Button>
-            </Link>
+            <>
+              <Link href="/connections/pinterest">
+                <Button variant="outline">
+                  <Settings2 className="mr-2 h-4 w-4" />
+                  Manage connection
+                </Button>
+              </Link>
+              <Link href="/pinterest/logs">
+                <Button variant="outline">
+                  <FileText className="mr-2 h-4 w-4" />
+                  API logs
+                </Button>
+              </Link>
+            </>
           )}
           {apiConnected ? (
             <Link href="/pinterest/compose">

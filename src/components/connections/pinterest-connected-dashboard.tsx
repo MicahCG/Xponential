@@ -22,6 +22,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { PinterestBoardTest } from "./pinterest-board-test";
+import { PinterestDisconnectButton } from "./pinterest-disconnect-button";
 
 const RECOGNIZED_SCOPES = [
   { key: "user_accounts:read", label: "Read account info" },
@@ -117,13 +118,14 @@ export function PinterestConnectedDashboard({
               Live OAuth connection to the Official Pinterest API v5
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Link href="/api/connect/start/pinterest">
               <Button variant="outline" size="sm">
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Reconnect
               </Button>
             </Link>
+            <PinterestDisconnectButton />
             <Link href="/pinterest/compose">
               <Button>
                 <PenSquare className="mr-2 h-4 w-4" />
