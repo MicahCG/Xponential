@@ -163,6 +163,7 @@ model PlatformConnection {
   platform       Platform
   accessToken    String           @map("access_token") @db.Text
   refreshToken   String?          @map("refresh_token") @db.Text
+  scopes         String?          @db.Text
   twitterCookie  String?          @map("twitter_cookie") @db.Text
   pinterestCookie String?         @map("pinterest_cookie") @db.Text
   accountHandle  String?          @map("account_handle")
