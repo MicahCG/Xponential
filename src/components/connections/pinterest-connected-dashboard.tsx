@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   PenSquare,
   XCircle,
+  RefreshCw,
 } from "lucide-react";
 import { PinterestBoardTest } from "./pinterest-board-test";
 
@@ -116,12 +117,20 @@ export function PinterestConnectedDashboard({
               Live OAuth connection to the Official Pinterest API v5
             </p>
           </div>
-          <Link href="/pinterest/compose">
-            <Button>
-              <PenSquare className="mr-2 h-4 w-4" />
-              Open Pin Composer
-            </Button>
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/api/connect/start/pinterest">
+              <Button variant="outline" size="sm">
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Reconnect
+              </Button>
+            </Link>
+            <Link href="/pinterest/compose">
+              <Button>
+                <PenSquare className="mr-2 h-4 w-4" />
+                Open Pin Composer
+              </Button>
+            </Link>
+          </div>
         </CardHeader>
         <CardContent>
           <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
