@@ -282,10 +282,10 @@ export default function PrivacyPolicyPage() {
           your data rights, or need to report a privacy concern, please contact
           us at{" "}
           <a
-            href="mailto:privacy@xponential.app"
+            href="mailto:giraudelc@gmail.com"
             className="text-blue-600 underline"
           >
-            privacy@xponential.app
+            giraudelc@gmail.com
           </a>
           .
         </p>
