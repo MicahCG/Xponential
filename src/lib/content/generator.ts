@@ -60,15 +60,39 @@ async function getActiveProfile(
   replyInstructions: string | null;
   feedbackExamples: FeedbackExample[] | null;
 } | null> {
-  const profile = await prisma.personalityProfile.findFirst({
-    where: {
-      userId,
-      isActive: true,
-      ...(connectionId && { platformConnectionId: connectionId }),
-    },
-    select: { profileData: true, replyInstructions: true, feedbackExamples: true },
-  });
+  // Try connection-specific first; fall back to workspace-level; finally any
+  // active profile. Mirrors loadPersonalityForGate so behavior is consistent
+  // across the gate, the generator, and any future personality consumer.
+  type Row = {
+    profileData: unknown;
+    replyInstructions: string | null;
+    feedbackExamples: unknown;
+  };
+  const select = {
+    profileData: true,
+    replyInstructions: true,
+    feedbackExamples: true,
+  } as const;
 
+  let profile: Row | null = null;
+  if (connectionId) {
+    profile = await prisma.personalityProfile.findFirst({
+      where: { userId, isActive: true, platformConnectionId: connectionId },
+      select,
+    });
+  }
+  if (!profile) {
+    profile = await prisma.personalityProfile.findFirst({
+      where: { userId, isActive: true, platformConnectionId: null },
+      select,
+    });
+  }
+  if (!profile) {
+    profile = await prisma.personalityProfile.findFirst({
+      where: { userId, isActive: true },
+      select,
+    });
+  }
   if (!profile) return null;
   return {
     personality: profile.profileData as unknown as PersonalityProfile,

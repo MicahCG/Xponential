@@ -114,14 +114,30 @@ export async function loadPersonalityForGate(
   userId: string,
   connectionId?: string
 ): Promise<PersonalityProfile | null> {
-  const profile = await prisma.personalityProfile.findFirst({
-    where: {
-      userId,
-      isActive: true,
-      ...(connectionId && { platformConnectionId: connectionId }),
-    },
-    select: { profileData: true },
-  });
+  // Try a connection-specific profile first (when explicitly created per-account);
+  // fall back to the user's active workspace-level profile so the personality
+  // applies across every connected account by default.
+  let profile: { profileData: unknown } | null = null;
+  if (connectionId) {
+    profile = await prisma.personalityProfile.findFirst({
+      where: { userId, isActive: true, platformConnectionId: connectionId },
+      select: { profileData: true },
+    });
+  }
+  if (!profile) {
+    profile = await prisma.personalityProfile.findFirst({
+      where: { userId, isActive: true, platformConnectionId: null },
+      select: { profileData: true },
+    });
+  }
+  if (!profile) {
+    // Last-resort: any active profile (handles legacy rows still pinned to a
+    // connection that the caller didn't pass).
+    profile = await prisma.personalityProfile.findFirst({
+      where: { userId, isActive: true },
+      select: { profileData: true },
+    });
+  }
   if (!profile) return null;
   return profile.profileData as unknown as PersonalityProfile;
 }
