@@ -6,7 +6,7 @@ import { getCurrentWorkspace } from "@/lib/workspace-context";
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(100),
-  promptTemplate: z.string().trim().min(1).max(4000),
+  promptTemplate: z.string().trim().min(1).max(100000),
   connectionId: z.string().min(1),
   durationSec: z.number().int().min(15).max(180).optional(),
   orientation: z.enum(["portrait", "landscape", "square"]).optional(),

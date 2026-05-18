@@ -38,7 +38,7 @@ async function getOrCreateChannel(connectionId: string, userId: string) {
 }
 
 const putSchema = z.object({
-  promptTemplate: z.string().max(4000),
+  promptTemplate: z.string().max(100000),
   durationSec: z.number().int().min(15).max(180).nullable().optional(),
   orientation: z
     .enum(["portrait", "landscape", "square"])

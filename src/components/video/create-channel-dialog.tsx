@@ -132,7 +132,7 @@ export function CreateChannelDialog({
               onChange={(e) => setPromptTemplate(e.target.value)}
               placeholder="A 30-second cinematic short of a candlelit eco wedding table with linen napkins, soft-focus dried florals, golden hour light, gentle hand-held camera, ambient acoustic guitar."
               rows={5}
-              maxLength={4000}
+              maxLength={100000}
             />
             <p className="text-xs text-muted-foreground">
               Passed verbatim to Popcorn&apos;s create_movie as the brief.

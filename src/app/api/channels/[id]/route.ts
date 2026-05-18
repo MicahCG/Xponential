@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 const updateSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
-  promptTemplate: z.string().trim().min(1).max(4000).optional(),
+  promptTemplate: z.string().trim().min(1).max(100000).optional(),
   connectionId: z.string().min(1).optional(),
   durationSec: z.number().int().min(15).max(180).nullable().optional(),
   orientation: z.enum(["portrait", "landscape", "square"]).nullable().optional(),

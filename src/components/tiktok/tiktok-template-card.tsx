@@ -234,10 +234,10 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
                 }}
                 placeholder="A 30-second cinematic short of … (Popcorn turns this into a video)"
                 rows={5}
-                maxLength={4000}
+                maxLength={100000}
               />
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{prompt.length}/4000</span>
+                <span>{prompt.length.toLocaleString()}/100,000</span>
                 {prompt !== savedPrompt && (
                   <span className="text-amber-600">Unsaved changes</span>
                 )}
