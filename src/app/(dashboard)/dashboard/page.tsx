@@ -92,10 +92,15 @@ export default async function DashboardPage() {
             </CardHeader>
             <CardContent>
               {activeConnections.length > 0 ? (
-                <div className="flex gap-2">
-                  {activeConnections.map((c) => (
-                    <Badge key={c.platform} variant="default" className="capitalize">
-                      {c.platform}: @{c.accountHandle}
+                <div className="flex flex-wrap gap-1.5">
+                  {activeConnections.map((c, i) => (
+                    <Badge
+                      key={`${c.platform}-${c.accountHandle}-${i}`}
+                      variant="secondary"
+                      className="gap-1 max-w-full"
+                    >
+                      <PlatformIcon platform={c.platform} />
+                      <span className="truncate">@{c.accountHandle}</span>
                     </Badge>
                   ))}
                 </div>
@@ -104,7 +109,11 @@ export default async function DashboardPage() {
               )}
               <CardDescription className="mt-2">
                 {activeConnections.length > 0
-                  ? `${activeConnections.length} platform(s) connected`
+                  ? `${activeConnections.length} account${
+                      activeConnections.length === 1 ? "" : "s"
+                    } across ${connectionHandleByPlatform.size} platform${
+                      connectionHandleByPlatform.size === 1 ? "" : "s"
+                    }`
                   : "Connect X to start posting"}
               </CardDescription>
             </CardContent>
