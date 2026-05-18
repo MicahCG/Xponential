@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Pin as PinIcon,
   Twitter,
+  Music2,
 } from "lucide-react";
 
 export const metadata = { title: "Connections - Xponential" };
@@ -115,6 +116,7 @@ export default async function ConnectionsHubPage() {
 
   const xConn = connections.find((c) => c.platform === "x");
   const pinConn = connections.find((c) => c.platform === "pinterest");
+  const tiktokConn = connections.find((c) => c.platform === "tiktok");
 
   // X status
   const xHasOAuth = !!xConn?.accessToken && xConn.status === "active";
@@ -136,6 +138,13 @@ export default async function ConnectionsHubPage() {
     ? "connected"
     : "disconnected";
   const pinStatusLabel = pinHasOAuth ? "API Connected" : "Not connected";
+
+  // TikTok status
+  const tiktokHasOAuth = !!tiktokConn?.accessToken && tiktokConn.status === "active";
+  const tiktokStatus: PlatformCardProps["status"] = tiktokHasOAuth
+    ? "connected"
+    : "disconnected";
+  const tiktokStatusLabel = tiktokHasOAuth ? "API Connected" : "Not connected";
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -198,15 +207,39 @@ export default async function ConnectionsHubPage() {
           secondaryHref={pinHasOAuth ? "/pinterest" : undefined}
           secondaryLabel={pinHasOAuth ? "Open Pinterest" : undefined}
         />
+
+        <PlatformCard
+          title="TikTok"
+          iconBg="bg-black"
+          icon={<Music2 className="h-5 w-5 text-white" />}
+          status={tiktokStatus}
+          statusLabel={tiktokStatusLabel}
+          details={
+            tiktokConn?.accountHandle && tiktokHasOAuth
+              ? `@${tiktokConn.accountHandle}`
+              : "Not connected"
+          }
+          bullets={[
+            { label: "Official TikTok API (Login Kit + Content Posting)", ok: tiktokHasOAuth },
+            { label: "Sandbox / Trial — Production review pending", ok: tiktokHasOAuth },
+            { label: "Drafts to inbox; final publish in TikTok app", ok: true },
+          ]}
+          primaryHref="/connections/tiktok"
+          primaryLabel={
+            tiktokStatus === "disconnected" ? "Connect TikTok" : "Manage"
+          }
+          secondaryHref={tiktokHasOAuth ? "/tiktok" : undefined}
+          secondaryLabel={tiktokHasOAuth ? "Open TikTok" : undefined}
+        />
       </div>
 
       <Card>
         <CardContent className="py-5">
           <h3 className="mb-1 text-sm font-semibold">Coming soon</h3>
           <p className="text-sm text-muted-foreground">
-            Instagram and TikTok will appear here once their adapters are
-            built. Each platform stays in its own world — its own connect flow,
-            its own composer, its own settings.
+            Instagram will appear here once its adapter is built. Each platform
+            stays in its own world — its own connect flow, its own composer, its
+            own settings.
           </p>
         </CardContent>
       </Card>

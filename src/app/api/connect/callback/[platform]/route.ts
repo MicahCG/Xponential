@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import * as xOAuth from "@/lib/oauth/x";
 import * as pinterestOAuth from "@/lib/oauth/pinterest";
+import * as tiktokOAuth from "@/lib/oauth/tiktok";
 import { getUserProfile as getXProfile } from "@/lib/platform/x-client";
 import { getUserAccount as getPinterestProfile } from "@/lib/platform/pinterest-client";
+import { getUserInfo as getTikTokUserInfo } from "@/lib/platform/tiktok-client";
 import { getDefaultBrandForUser } from "@/lib/brand-context";
 
 export async function GET(
@@ -185,6 +187,76 @@ export async function GET(
       const pinRedirect =
         returnTo ?? `/connections/pinterest?connected=1&id=${connectionRow.id}`;
       return NextResponse.redirect(new URL(pinRedirect, request.url));
+    }
+
+    if (platform === "tiktok") {
+      if (oauthState.platform !== "tiktok") {
+        return NextResponse.redirect(
+          new URL("/connections/tiktok?error=invalid_state", request.url)
+        );
+      }
+
+      const clientKey = process.env.TIKTOK_CLIENT_KEY!;
+      const clientSecret = process.env.TIKTOK_CLIENT_SECRET!;
+      const redirectUri = process.env.TIKTOK_CALLBACK_URL!;
+
+      const tokens = await tiktokOAuth.exchangeCode({
+        code,
+        clientKey,
+        clientSecret,
+        redirectUri,
+      });
+
+      // Fetch the user's profile so we can store display name + open_id
+      const tempConn = {
+        id: "pending",
+        brandId,
+        userId,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        tokenExpires: new Date(Date.now() + tokens.expires_in * 1000),
+      };
+      const profile = await getTikTokUserInfo(tempConn);
+      const openId = profile.open_id ?? tokens.open_id;
+      const displayHandle = profile.username || profile.display_name || openId;
+
+      const existing = await prisma.platformConnection.findFirst({
+        where: { userId, platform: "tiktok", accountId: openId },
+      });
+
+      const tokenExpires = new Date(Date.now() + tokens.expires_in * 1000);
+      const connectionRow = existing
+        ? await prisma.platformConnection.update({
+            where: { id: existing.id },
+            data: {
+              brandId,
+              accessToken: tokens.access_token,
+              refreshToken: tokens.refresh_token,
+              tokenExpires,
+              scopes: tokens.scope,
+              accountHandle: displayHandle,
+              status: "active",
+            },
+            select: { id: true },
+          })
+        : await prisma.platformConnection.create({
+            data: {
+              userId,
+              brandId,
+              platform: "tiktok",
+              accessToken: tokens.access_token,
+              refreshToken: tokens.refresh_token,
+              tokenExpires,
+              scopes: tokens.scope,
+              accountHandle: displayHandle,
+              accountId: openId,
+            },
+            select: { id: true },
+          });
+
+      const tiktokRedirect =
+        returnTo ?? `/connections/tiktok?connected=1&id=${connectionRow.id}`;
+      return NextResponse.redirect(new URL(tiktokRedirect, request.url));
     }
 
     return NextResponse.redirect(

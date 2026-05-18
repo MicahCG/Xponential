@@ -15,6 +15,7 @@ import {
   BarChart2,
   Pin,
   Link as LinkIcon,
+  Music2,
 } from "lucide-react";
 import { BrandSwitcher, type BrandSummary } from "@/components/layout/brand-switcher";
 
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/personality", label: "Personality", icon: Brain },
   { href: "/video", label: "Video Studio", icon: Clapperboard },
   { href: "/pinterest", label: "Pinterest", icon: Pin },
+  { href: "/tiktok", label: "TikTok", icon: Music2 },
   { href: "/analytics", label: "Analytics", icon: BarChart2 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

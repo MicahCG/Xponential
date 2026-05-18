@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import * as xOAuth from "@/lib/oauth/x";
 import * as pinterestOAuth from "@/lib/oauth/pinterest";
+import * as tiktokOAuth from "@/lib/oauth/tiktok";
 import { getCurrentBrand } from "@/lib/brand-context";
 
 export async function GET(
@@ -94,6 +95,55 @@ export async function GET(
       redirectUriEncoded: encodeURIComponent(redirectUri),
       responseType: "code",
       scopes: pinterestOAuth.PINTEREST_OAUTH_SCOPES,
+      state,
+      authUrl,
+      secretConfigured: clientSecretConfigured,
+    });
+
+    return NextResponse.redirect(authUrl);
+  }
+
+  if (platform === "tiktok") {
+    const clientKey = process.env.TIKTOK_CLIENT_KEY;
+    const clientSecretConfigured = !!process.env.TIKTOK_CLIENT_SECRET;
+    const redirectUri = process.env.TIKTOK_CALLBACK_URL;
+
+    if (!clientKey || !redirectUri || !clientSecretConfigured) {
+      const missing = [
+        !clientKey && "TIKTOK_CLIENT_KEY",
+        !clientSecretConfigured && "TIKTOK_CLIENT_SECRET",
+        !redirectUri && "TIKTOK_CALLBACK_URL",
+      ]
+        .filter(Boolean)
+        .join(", ");
+      console.error(`[tiktok-oauth] Missing env vars: ${missing}`);
+      return NextResponse.json(
+        { error: `TikTok OAuth is not configured. Missing env: ${missing}` },
+        { status: 500 }
+      );
+    }
+
+    const state = tiktokOAuth.generateState();
+
+    await prisma.oAuthState.create({
+      data: {
+        state,
+        userId: session.user.id,
+        brandId: brand.id,
+        platform: "tiktok",
+        returnTo,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      },
+    });
+
+    const authUrl = tiktokOAuth.buildAuthUrl({ clientKey, redirectUri, state });
+
+    console.log("[tiktok-oauth] Authorization URL built:", {
+      clientKey,
+      clientKeyLength: clientKey.length,
+      redirectUri,
+      responseType: "code",
+      scopes: tiktokOAuth.TIKTOK_OAUTH_SCOPES,
       state,
       authUrl,
       secretConfigured: clientSecretConfigured,
