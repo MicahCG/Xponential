@@ -81,7 +81,10 @@ async function rpc<T>(
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      Accept: "application/json",
+      // Popcorn's MCP server requires both content types per the MCP HTTP
+      // transport spec — it picks JSON vs SSE based on the operation. Single
+      // tool calls still come back as a single JSON response.
+      Accept: "application/json, text/event-stream",
     },
     body: JSON.stringify(body),
   });
@@ -96,7 +99,37 @@ async function rpc<T>(
     });
   }
 
-  const data = (await res.json()) as JsonRpcResponse<T>;
+  // Popcorn's MCP server can respond with either application/json (single
+  // response) or text/event-stream (SSE). For non-streaming tool calls it
+  // typically uses JSON, but we handle both for safety.
+  const contentType = res.headers.get("content-type") || "";
+  let data: JsonRpcResponse<T>;
+  if (contentType.includes("text/event-stream")) {
+    const text = await res.text();
+    // Extract the first `data: …` line — that's the JSON-RPC envelope.
+    const dataLine = text
+      .split(/\r?\n/)
+      .find((line) => line.startsWith("data:"));
+    if (!dataLine) {
+      throw new PopcornError({
+        message: "Popcorn MCP returned an empty SSE stream.",
+        code: "empty_sse",
+        raw: text,
+      });
+    }
+    try {
+      data = JSON.parse(dataLine.slice(5).trim()) as JsonRpcResponse<T>;
+    } catch (err) {
+      throw new PopcornError({
+        message: `Popcorn MCP returned malformed SSE: ${err instanceof Error ? err.message : "parse error"}`,
+        code: "sse_parse_error",
+        raw: text,
+      });
+    }
+  } else {
+    data = (await res.json()) as JsonRpcResponse<T>;
+  }
+
   if ("error" in data) {
     throw new PopcornError({
       message: `Popcorn MCP error: ${data.error.message}`,
