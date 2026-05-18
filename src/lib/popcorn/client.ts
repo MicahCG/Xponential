@@ -1,9 +1,13 @@
 /**
  * Popcorn API client — talks to Popcorn's MCP HTTP endpoint via JSON-RPC.
  *
- * Popcorn exposes its production API as an MCP server at api.popcorn.co/mcp.
- * MCP-over-HTTP is just JSON-RPC: POST a tools/call request, get a result back.
- * We use the bearer-token transport (POPCORN_API_KEY).
+ * MCP HTTP transport (spec rev 2025-03-26) requires a two-step handshake:
+ *   1. POST `initialize` → server responds with an Mcp-Session-Id header.
+ *   2. Every subsequent request includes Mcp-Session-Id: <uuid> as a header.
+ *
+ * We cache the session ID at module scope so it survives across invocations
+ * of the same serverless instance. On a 4xx that signals the session is
+ * missing/expired, we invalidate the cache and retry once.
  *
  * Two methods we need today:
  *   - createMovie(brief, opts) → returns { movieId }
@@ -11,6 +15,9 @@
  */
 
 const DEFAULT_MCP_URL = "https://api.popcorn.co/mcp";
+const PROTOCOL_VERSION = "2025-03-26";
+
+let cachedSessionId: string | null = null;
 
 export class PopcornError extends Error {
   readonly code: string;
@@ -64,29 +71,28 @@ interface JsonRpcError {
 
 type JsonRpcResponse<T> = JsonRpcSuccess<T> | JsonRpcError;
 
-async function rpc<T>(
-  method: string,
-  params: Record<string, unknown> = {}
-): Promise<T> {
+/**
+ * Send a JSON-RPC payload to the MCP endpoint. Handles both response shapes
+ * (single JSON or text/event-stream with one data line) and returns the
+ * parsed envelope along with the raw Response so callers can grab headers
+ * (specifically Mcp-Session-Id from the initialize call).
+ */
+async function rawRpc<T>(
+  payload: JsonRpcRequest,
+  sessionId: string | null
+): Promise<{ data: JsonRpcResponse<T>; response: Response }> {
   const { url, apiKey } = getConfig();
-  const body: JsonRpcRequest = {
-    jsonrpc: "2.0",
-    id: Date.now(),
-    method,
-    params,
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+    Accept: "application/json, text/event-stream",
   };
+  if (sessionId) headers["Mcp-Session-Id"] = sessionId;
 
   const res = await fetch(url, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      // Popcorn's MCP server requires both content types per the MCP HTTP
-      // transport spec — it picks JSON vs SSE based on the operation. Single
-      // tool calls still come back as a single JSON response.
-      Accept: "application/json, text/event-stream",
-    },
-    body: JSON.stringify(body),
+    headers,
+    body: JSON.stringify(payload),
   });
 
   if (!res.ok) {
@@ -99,14 +105,10 @@ async function rpc<T>(
     });
   }
 
-  // Popcorn's MCP server can respond with either application/json (single
-  // response) or text/event-stream (SSE). For non-streaming tool calls it
-  // typically uses JSON, but we handle both for safety.
   const contentType = res.headers.get("content-type") || "";
   let data: JsonRpcResponse<T>;
   if (contentType.includes("text/event-stream")) {
     const text = await res.text();
-    // Extract the first `data: …` line — that's the JSON-RPC envelope.
     const dataLine = text
       .split(/\r?\n/)
       .find((line) => line.startsWith("data:"));
@@ -130,14 +132,97 @@ async function rpc<T>(
     data = (await res.json()) as JsonRpcResponse<T>;
   }
 
+  return { data, response: res };
+}
+
+/**
+ * Initialize an MCP session. Returns the Mcp-Session-Id the server issues,
+ * which must be passed on every subsequent request.
+ */
+async function initializeSession(): Promise<string> {
+  const init: JsonRpcRequest = {
+    jsonrpc: "2.0",
+    id: Date.now(),
+    method: "initialize",
+    params: {
+      protocolVersion: PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: { name: "xponential", version: "0.1" },
+    },
+  };
+  const { data, response } = await rawRpc<unknown>(init, null);
   if ("error" in data) {
     throw new PopcornError({
-      message: `Popcorn MCP error: ${data.error.message}`,
+      message: `Popcorn MCP initialize failed: ${data.error.message}`,
       code: String(data.error.code),
       raw: data.error.data,
     });
   }
-  return data.result;
+  const sessionId =
+    response.headers.get("mcp-session-id") ??
+    response.headers.get("Mcp-Session-Id");
+  if (!sessionId) {
+    throw new PopcornError({
+      message:
+        "Popcorn MCP initialize did not return an Mcp-Session-Id header.",
+      code: "no_session_id",
+    });
+  }
+  return sessionId;
+}
+
+async function ensureSession(): Promise<string> {
+  if (cachedSessionId) return cachedSessionId;
+  cachedSessionId = await initializeSession();
+  return cachedSessionId;
+}
+
+function isSessionError(err: unknown): boolean {
+  if (!(err instanceof PopcornError)) return false;
+  // Server returns -32000 with "Mcp-Session-Id header is required" when the
+  // session is missing or expired. We also retry on any 4xx that mentions
+  // session, to be safe.
+  const msg = err.message.toLowerCase();
+  return (
+    msg.includes("mcp-session-id") ||
+    msg.includes("session") && (err.httpCode === 400 || err.httpCode === 401)
+  );
+}
+
+async function rpc<T>(
+  method: string,
+  params: Record<string, unknown> = {}
+): Promise<T> {
+  const sendOnce = async (): Promise<T> => {
+    const sessionId = await ensureSession();
+    const body: JsonRpcRequest = {
+      jsonrpc: "2.0",
+      id: Date.now(),
+      method,
+      params,
+    };
+    const { data } = await rawRpc<T>(body, sessionId);
+    if ("error" in data) {
+      throw new PopcornError({
+        message: `Popcorn MCP error: ${data.error.message}`,
+        code: String(data.error.code),
+        raw: data.error.data,
+        httpCode: 200,
+      });
+    }
+    return data.result;
+  };
+
+  try {
+    return await sendOnce();
+  } catch (err) {
+    // Session expired or invalidated — reset cache and retry once.
+    if (isSessionError(err)) {
+      cachedSessionId = null;
+      return sendOnce();
+    }
+    throw err;
+  }
 }
 
 /**
