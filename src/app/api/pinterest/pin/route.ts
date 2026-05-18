@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCurrentBrand } from "@/lib/brand-context";
+import { getCurrentWorkspace } from "@/lib/workspace-context";
 import {
   loadActiveConnection,
   createPin as createPinViaApi,
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const brand = await getCurrentBrand(session.user.id);
+  const workspace = await getCurrentWorkspace(session.user.id);
 
   const body = await request.json();
   const parsed = pinSchema.safeParse(body);
@@ -45,12 +45,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const conn = await loadActiveConnection(brand.id, { userId: session.user.id });
+    const conn = await loadActiveConnection(workspace.id, { userId: session.user.id });
     if (!conn || !conn.accessToken) {
       return NextResponse.json(
         {
           error:
-            "Pinterest API is not connected for this brand. Click 'Connect with Pinterest' first.",
+            "Pinterest API is not connected for this workspace. Click 'Connect with Pinterest' first.",
         },
         { status: 400 }
       );
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       const record = await prisma.postHistory.create({
         data: {
           userId: session.user.id,
-          brandId: brand.id,
+          workspaceId: workspace.id,
           platform: "pinterest",
           postType: "original",
           content: parsed.data.description,
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await createPinViaApify({
-      brandId: brand.id,
+      workspaceId: workspace.id,
       imageUrl: parsed.data.imageUrl,
       title: parsed.data.title,
       description: parsed.data.description,
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
     const record = await prisma.postHistory.create({
       data: {
         userId: session.user.id,
-        brandId: brand.id,
+        workspaceId: workspace.id,
         platform: "pinterest",
         postType: "original",
         content: parsed.data.description,

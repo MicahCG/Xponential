@@ -46,7 +46,7 @@ export async function publishQueueItem(queueItemId: string, userId: string) {
   await prisma.postHistory.create({
     data: {
       userId,
-      brandId: item.brandId,
+      workspaceId: item.workspaceId,
       platform: item.platform,
       postType: item.postType,
       barrel: item.barrel,

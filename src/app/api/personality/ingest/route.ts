@@ -6,14 +6,14 @@ import { analyzePersonality } from "@/lib/personality/analyzer";
 import { getAccountRecommendations } from "@/lib/personality/recommender";
 import { getValidAccessToken, getUsersByUsernames } from "@/lib/platform/x-client";
 import { ApiResponseError } from "twitter-api-v2";
-import { getCurrentBrand } from "@/lib/brand-context";
+import { getCurrentWorkspace } from "@/lib/workspace-context";
 
 export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const brand = await getCurrentBrand(session.user.id);
+  const workspace = await getCurrentWorkspace(session.user.id);
 
   const userId = session.user.id;
 
@@ -50,8 +50,8 @@ export async function POST(request: Request) {
 
     // Step 3: Carry over feedback, deactivate existing profiles for this connection, save new one
     const deactivateWhere = connectionId
-      ? { userId, brandId: brand.id, platformConnectionId: connectionId, isActive: true }
-      : { userId, brandId: brand.id, isActive: true };
+      ? { userId, workspaceId: workspace.id, platformConnectionId: connectionId, isActive: true }
+      : { userId, workspaceId: workspace.id, isActive: true };
 
     const existing = await prisma.personalityProfile.findFirst({
       where: deactivateWhere,
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     const saved = await prisma.personalityProfile.create({
       data: {
         userId: userId,
-        brandId: brand.id,
+        workspaceId: workspace.id,
         platformConnectionId: connectionId ?? null,
         method: "ingest",
         rawInput: JSON.parse(
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
     const allAccounts = [
       ...engagedAccounts.map((a) => ({
         userId: userId,
-        brandId: brand.id,
+        workspaceId: workspace.id,
         platformConnectionId: connectionId ?? null,
         platform: "x" as const,
         accountHandle: a.username,
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
       })),
       ...recommendedAccounts.map((a) => ({
         userId: userId,
-        brandId: brand.id,
+        workspaceId: workspace.id,
         platformConnectionId: connectionId ?? null,
         platform: "x" as const,
         accountHandle: a.username,
@@ -149,8 +149,8 @@ export async function POST(request: Request) {
     for (const account of allAccounts) {
       await prisma.watchedAccount.upsert({
         where: {
-          brandId_platform_accountHandle: {
-            brandId: account.brandId,
+          workspaceId_platform_accountHandle: {
+            workspaceId: account.workspaceId,
             platform: account.platform,
             accountHandle: account.accountHandle,
           },

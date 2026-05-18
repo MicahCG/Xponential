@@ -17,7 +17,6 @@ import {
   Link as LinkIcon,
   Music2,
 } from "lucide-react";
-import { BrandSwitcher, type BrandSummary } from "@/components/layout/brand-switcher";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -31,12 +30,7 @@ const navItems = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-interface SidebarProps {
-  currentBrand: { id: string; name: string; slug: string };
-  brands: BrandSummary[];
-}
-
-export function Sidebar({ currentBrand, brands }: SidebarProps) {
+export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -78,19 +72,6 @@ export function Sidebar({ currentBrand, brands }: SidebarProps) {
           </>
         )}
       </div>
-
-      {/* BrandSwitcher hidden: the user-facing model is now platform-first
-          with multi-account per platform. Brand still exists in DB as an
-          implicit container; bring this back if multi-brand UI is desired. */}
-      {false && (
-        <div className={cn("border-b", collapsed ? "p-2" : "p-3")}>
-          <BrandSwitcher
-            currentBrand={currentBrand}
-            brands={brands}
-            collapsed={collapsed}
-          />
-        </div>
-      )}
 
       <nav className={cn("flex-1 space-y-1", collapsed ? "p-2" : "p-3")}>
         {navItems.map((item) => {

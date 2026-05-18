@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCurrentBrand } from "@/lib/brand-context";
+import { getCurrentWorkspace } from "@/lib/workspace-context";
 import {
   loadActiveConnection,
   initDraftUpload,
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const brand = await getCurrentBrand(session.user.id);
+  const workspace = await getCurrentWorkspace(session.user.id);
 
   const body = await request.json();
   const parsed = draftSchema.safeParse(body);
@@ -33,10 +33,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const conn = await loadActiveConnection(brand.id, { userId: session.user.id });
+  const conn = await loadActiveConnection(workspace.id, { userId: session.user.id });
   if (!conn) {
     return NextResponse.json(
-      { error: "TikTok is not connected for this brand. Connect Login Kit first." },
+      { error: "TikTok is not connected for this workspace. Connect Login Kit first." },
       { status: 400 }
     );
   }
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     const record = await prisma.postHistory.create({
       data: {
         userId: session.user.id,
-        brandId: brand.id,
+        workspaceId: workspace.id,
         platform: "tiktok",
         postType: "original",
         content: parsed.data.caption,

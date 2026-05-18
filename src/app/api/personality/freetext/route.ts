@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { freetextSchema } from "@/lib/validators";
 import { analyzePersonality } from "@/lib/personality/analyzer";
-import { getCurrentBrand } from "@/lib/brand-context";
+import { getCurrentWorkspace } from "@/lib/workspace-context";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const brand = await getCurrentBrand(session.user.id);
+    const workspace = await getCurrentWorkspace(session.user.id);
     const profile = await analyzePersonality({
       method: "freetext",
       description: parsed.data.description,
@@ -29,19 +29,19 @@ export async function POST(request: NextRequest) {
     });
 
     const existing = await prisma.personalityProfile.findFirst({
-      where: { userId: session.user.id, brandId: brand.id, isActive: true },
+      where: { userId: session.user.id, workspaceId: workspace.id, isActive: true },
       select: { replyInstructions: true, feedbackExamples: true },
     });
 
     await prisma.personalityProfile.updateMany({
-      where: { userId: session.user.id, brandId: brand.id, isActive: true },
+      where: { userId: session.user.id, workspaceId: workspace.id, isActive: true },
       data: { isActive: false },
     });
 
     const saved = await prisma.personalityProfile.create({
       data: {
         userId: session.user!.id,
-        brandId: brand.id,
+        workspaceId: workspace.id,
         method: "freetext",
         rawInput: JSON.parse(JSON.stringify(parsed.data)),
         profileData: JSON.parse(JSON.stringify(profile)),

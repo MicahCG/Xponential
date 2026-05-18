@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getCurrentBrand } from "@/lib/brand-context";
+import { getCurrentWorkspace } from "@/lib/workspace-context";
 import {
   loadActiveConnection,
   listBoards,
@@ -12,9 +12,9 @@ export async function GET() {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const brand = await getCurrentBrand(session.user.id);
+  const workspace = await getCurrentWorkspace(session.user.id);
 
-  const conn = await loadActiveConnection(brand.id, { userId: session.user.id });
+  const conn = await loadActiveConnection(workspace.id, { userId: session.user.id });
   if (!conn || !conn.accessToken) {
     return NextResponse.json({ boards: [], hasApiConnection: false });
   }

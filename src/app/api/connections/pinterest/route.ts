@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCurrentBrand } from "@/lib/brand-context";
+import { getCurrentWorkspace } from "@/lib/workspace-context";
 
 const connectSchema = z.object({
   accountHandle: z.string().trim().min(1).max(50),
@@ -18,10 +18,10 @@ export async function GET() {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const brand = await getCurrentBrand(session.user.id);
+  const workspace = await getCurrentWorkspace(session.user.id);
 
   const connection = await prisma.platformConnection.findFirst({
-    where: { brandId: brand.id, platform: "pinterest" },
+    where: { workspaceId: workspace.id, platform: "pinterest" },
     select: {
       id: true,
       accountHandle: true,
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const brand = await getCurrentBrand(session.user.id);
+  const workspace = await getCurrentWorkspace(session.user.id);
 
   const body = await request.json();
   const parsed = connectSchema.safeParse(body);
@@ -62,10 +62,10 @@ export async function POST(request: NextRequest) {
 
   const handle = parsed.data.accountHandle.replace(/^@/, "");
 
-  // One pinterest connection per brand — augment whichever row exists (OAuth
-  // may have created it already). Otherwise create a cookie-only row.
+  // One pinterest connection per workspace — augment whichever row exists
+  // (OAuth may have created it already). Otherwise create a cookie-only row.
   const existing = await prisma.platformConnection.findFirst({
-    where: { brandId: brand.id, platform: "pinterest" },
+    where: { workspaceId: workspace.id, platform: "pinterest" },
   });
 
   const connection = existing
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
     : await prisma.platformConnection.create({
         data: {
           userId: session.user.id,
-          brandId: brand.id,
+          workspaceId: workspace.id,
           platform: "pinterest",
           accessToken: "", // cookie-only auth; OAuth token left blank
           pinterestCookie: parsed.data.pinterestCookie,
@@ -100,13 +100,13 @@ export async function DELETE() {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const brand = await getCurrentBrand(session.user.id);
+  const workspace = await getCurrentWorkspace(session.user.id);
 
   // Only clear the cookie; leave the OAuth side intact. If the row exists only
   // for the cookie path (no OAuth), this turns it into an empty row — that's
   // fine for now since loadActiveConnection gates on accessToken.
   const r = await prisma.platformConnection.updateMany({
-    where: { brandId: brand.id, platform: "pinterest" },
+    where: { workspaceId: workspace.id, platform: "pinterest" },
     data: { pinterestCookie: null },
   });
   return NextResponse.json({ updated: r.count });

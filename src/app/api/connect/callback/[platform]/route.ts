@@ -6,7 +6,7 @@ import * as tiktokOAuth from "@/lib/oauth/tiktok";
 import { getUserProfile as getXProfile } from "@/lib/platform/x-client";
 import { getUserAccount as getPinterestProfile } from "@/lib/platform/pinterest-client";
 import { getUserInfo as getTikTokUserInfo } from "@/lib/platform/tiktok-client";
-import { getDefaultBrandForUser } from "@/lib/brand-context";
+import { getDefaultWorkspaceForUser } from "@/lib/workspace-context";
 
 export async function GET(
   request: NextRequest,
@@ -47,9 +47,9 @@ export async function GET(
   }
 
   const userId = oauthState.userId;
-  // Fallback for legacy OAuthState rows started before brandId was captured
-  const brandId =
-    oauthState.brandId ?? (await getDefaultBrandForUser(userId)).id;
+  // Fallback for legacy OAuthState rows started before workspaceId was captured
+  const workspaceId =
+    oauthState.workspaceId ?? (await getDefaultWorkspaceForUser(userId)).id;
   const returnTo = oauthState.returnTo;
 
   // Delete the state record (single-use)
@@ -98,7 +98,7 @@ export async function GET(
         const created = await prisma.platformConnection.create({
           data: {
             userId,
-            brandId,
+            workspaceId,
             platform: "x",
             accessToken: tokens.access_token,
             refreshToken: tokens.refresh_token,
@@ -141,7 +141,7 @@ export async function GET(
       // before we persist the row.
       const tempConn = {
         id: "pending",
-        brandId,
+        workspaceId,
         userId,
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,
@@ -159,7 +159,7 @@ export async function GET(
         ? await prisma.platformConnection.update({
             where: { id: existing.id },
             data: {
-              brandId,
+              workspaceId,
               accessToken: tokens.access_token,
               refreshToken: tokens.refresh_token,
               tokenExpires,
@@ -172,7 +172,7 @@ export async function GET(
         : await prisma.platformConnection.create({
             data: {
               userId,
-              brandId,
+              workspaceId,
               platform: "pinterest",
               accessToken: tokens.access_token,
               refreshToken: tokens.refresh_token,
@@ -210,7 +210,7 @@ export async function GET(
       // Fetch the user's profile so we can store display name + open_id
       const tempConn = {
         id: "pending",
-        brandId,
+        workspaceId,
         userId,
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,
@@ -229,7 +229,7 @@ export async function GET(
         ? await prisma.platformConnection.update({
             where: { id: existing.id },
             data: {
-              brandId,
+              workspaceId,
               accessToken: tokens.access_token,
               refreshToken: tokens.refresh_token,
               tokenExpires,
@@ -242,7 +242,7 @@ export async function GET(
         : await prisma.platformConnection.create({
             data: {
               userId,
-              brandId,
+              workspaceId,
               platform: "tiktok",
               accessToken: tokens.access_token,
               refreshToken: tokens.refresh_token,

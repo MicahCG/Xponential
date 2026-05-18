@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getCurrentBrand } from "@/lib/brand-context";
+import { getCurrentWorkspace } from "@/lib/workspace-context";
 import {
   loadActiveConnection,
   listBoards,
@@ -17,12 +17,12 @@ export async function POST() {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const brand = await getCurrentBrand(session.user.id);
+  const workspace = await getCurrentWorkspace(session.user.id);
 
-  const conn = await loadActiveConnection(brand.id, { userId: session.user.id });
+  const conn = await loadActiveConnection(workspace.id, { userId: session.user.id });
   if (!conn) {
     return NextResponse.json(
-      { error: "Pinterest API is not connected for this brand." },
+      { error: "Pinterest API is not connected for this workspace." },
       { status: 400 }
     );
   }

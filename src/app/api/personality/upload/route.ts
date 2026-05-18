@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { analyzePersonality } from "@/lib/personality/analyzer";
-import { getCurrentBrand } from "@/lib/brand-context";
+import { getCurrentWorkspace } from "@/lib/workspace-context";
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = ["text/plain", "application/pdf", "text/markdown"];
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const brand = await getCurrentBrand(session.user.id);
+  const workspace = await getCurrentWorkspace(session.user.id);
 
   const formData = await request.formData();
   const file = formData.get("file") as File | null;
@@ -81,19 +81,19 @@ export async function POST(request: NextRequest) {
     });
 
     const existing = await prisma.personalityProfile.findFirst({
-      where: { userId: session.user.id, brandId: brand.id, isActive: true },
+      where: { userId: session.user.id, workspaceId: workspace.id, isActive: true },
       select: { replyInstructions: true, feedbackExamples: true },
     });
 
     await prisma.personalityProfile.updateMany({
-      where: { userId: session.user.id, brandId: brand.id, isActive: true },
+      where: { userId: session.user.id, workspaceId: workspace.id, isActive: true },
       data: { isActive: false },
     });
 
     const saved = await prisma.personalityProfile.create({
       data: {
         userId: session.user.id,
-        brandId: brand.id,
+        workspaceId: workspace.id,
         method: "freetext",
         rawInput: { fileName: file.name, charCount: trimmed.length },
         profileData: JSON.parse(JSON.stringify(profile)),

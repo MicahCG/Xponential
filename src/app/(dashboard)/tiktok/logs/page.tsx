@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
-import { getCurrentBrand } from "@/lib/brand-context";
+import { getCurrentWorkspace } from "@/lib/workspace-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChevronLeft, Check, X } from "lucide-react";
@@ -10,10 +10,10 @@ export const metadata = { title: "TikTok API logs - Xponential" };
 
 export default async function TikTokLogsPage() {
   const session = await requireAuth();
-  const brand = await getCurrentBrand(session.user!.id as string);
+  const workspace = await getCurrentWorkspace(session.user!.id as string);
 
   const logs = await prisma.tikTokApiLog.findMany({
-    where: { brandId: brand.id },
+    where: { workspaceId: workspace.id },
     orderBy: { createdAt: "desc" },
     take: 50,
   });
@@ -32,7 +32,7 @@ export default async function TikTokLogsPage() {
           <h1 className="text-2xl font-bold tracking-tight">TikTok API logs</h1>
           <p className="text-muted-foreground">
             Every call to the official TikTok v2 API is logged here for{" "}
-            <span className="font-medium text-foreground">{brand.name}</span>.
+            <span className="font-medium text-foreground">{workspace.name}</span>.
             Audit trail for review and debugging.
           </p>
         </div>

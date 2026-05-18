@@ -13,13 +13,13 @@ export async function GET(request: NextRequest) {
 
   const connections = await prisma.platformConnection.findMany({
     where: { platform: "x", status: "active" },
-    select: { userId: true, brandId: true },
+    select: { userId: true, workspaceId: true },
   });
 
   let snapped = 0;
   const errors: string[] = [];
 
-  for (const { userId, brandId } of connections) {
+  for (const { userId, workspaceId } of connections) {
     try {
       const accessToken = await getValidAccessToken(userId);
       const profile = await getUserProfileFull(accessToken);
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
       await prisma.followerSnapshot.create({
         data: {
           userId,
-          brandId,
+          workspaceId,
           platform: "x",
           followers: profile.followerCount,
         },

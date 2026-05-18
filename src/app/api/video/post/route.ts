@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { postTweetWithRetry, XPostError } from "@/lib/platform/x-client";
-import { getCurrentBrand } from "@/lib/brand-context";
+import { getCurrentWorkspace } from "@/lib/workspace-context";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const brand = await getCurrentBrand(session.user.id);
+  const workspace = await getCurrentWorkspace(session.user.id);
 
   const body = await request.json();
   const caption = (body.caption as string)?.trim();
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     await prisma.postHistory.create({
       data: {
         userId: session.user.id,
-        brandId: brand.id,
+        workspaceId: workspace.id,
         platform: "x",
         postType: "original",
         content: caption,

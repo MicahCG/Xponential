@@ -31,7 +31,7 @@ export default async function PinterestPage() {
 
   const apiConnected = !!current && current.hasAccessToken && current.status === "active";
 
-  // Pull pins for the currently-selected connection's brand
+  // Pull pins for the currently-selected connection's workspace
   let pins: Array<{
     id: string;
     content: string;
@@ -42,12 +42,12 @@ export default async function PinterestPage() {
   if (apiConnected && current) {
     const full = await prisma.platformConnection.findUnique({
       where: { id: current.id },
-      select: { brandId: true },
+      select: { workspaceId: true },
     });
     if (full) {
       pins = await prisma.postHistory.findMany({
         where: {
-          brandId: full.brandId,
+          workspaceId: full.workspaceId,
           platform: "pinterest",
           postingMethod: "pinterest_api",
         },

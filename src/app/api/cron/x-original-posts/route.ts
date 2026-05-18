@@ -74,14 +74,14 @@ export async function GET(request: NextRequest) {
 
   for (const connection of connections) {
     result.connectionsChecked++;
-    const { id: connectionId, userId, brandId, accountHandle } = connection;
+    const { id: connectionId, userId, workspaceId, accountHandle } = connection;
     const tag = `${accountHandle ?? userId}`;
 
     try {
       // Daily cap
       const todayCount = await prisma.postHistory.count({
         where: {
-          brandId,
+          workspaceId,
           platform: "x",
           postType: "original",
           postedAt: { gte: startOfTodayUtc },
@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
       });
       const pendingCount = await prisma.contentQueue.count({
         where: {
-          brandId,
+          workspaceId,
           platform: "x",
           postType: "original",
           status: "pending",
@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
 
       // Personality
       const personalityRow = await prisma.personalityProfile.findFirst({
-        where: { brandId, isActive: true },
+        where: { workspaceId, isActive: true },
         select: { profileData: true, replyInstructions: true },
       });
       if (!personalityRow) {
@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
 
       // Recent posts (for repeat avoidance)
       const recent = await prisma.postHistory.findMany({
-        where: { brandId, platform: "x" },
+        where: { workspaceId, platform: "x" },
         orderBy: { postedAt: "desc" },
         take: 8,
         select: { content: true },
@@ -165,7 +165,7 @@ export async function GET(request: NextRequest) {
           await prisma.postHistory.create({
             data: {
               userId,
-              brandId,
+              workspaceId,
               platform: "x",
               postType: "original",
               content: draft.content,
@@ -181,7 +181,7 @@ export async function GET(request: NextRequest) {
           await prisma.contentQueue.create({
             data: {
               userId,
-              brandId,
+              workspaceId,
               platform: "x",
               postType: "original",
               content: draft.content,
@@ -195,7 +195,7 @@ export async function GET(request: NextRequest) {
         await prisma.contentQueue.create({
           data: {
             userId,
-            brandId,
+            workspaceId,
             platform: "x",
             postType: "original",
             content: draft.content,

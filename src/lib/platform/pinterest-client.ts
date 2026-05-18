@@ -24,7 +24,7 @@ export class PinterestApiError extends Error {
 }
 
 interface ApiLogEntry {
-  brandId: string;
+  workspaceId: string;
   userId: string;
   method: string;
   endpoint: string;
@@ -52,7 +52,7 @@ async function logApiCall(entry: ApiLogEntry): Promise<void> {
   try {
     await prisma.pinterestApiLog.create({
       data: {
-        brandId: entry.brandId,
+        workspaceId: entry.workspaceId,
         userId: entry.userId,
         method: entry.method,
         endpoint: entry.endpoint,
@@ -71,7 +71,7 @@ async function logApiCall(entry: ApiLogEntry): Promise<void> {
 
 interface ConnectionWithTokens {
   id: string;
-  brandId: string;
+  workspaceId: string;
   userId: string;
   accessToken: string;
   refreshToken: string | null;
@@ -146,7 +146,7 @@ async function apiFetch<T>(
     parsed = text ? JSON.parse(text) : null;
   } catch (err) {
     await logApiCall({
-      brandId: conn.brandId,
+      workspaceId: conn.workspaceId,
       userId: conn.userId,
       method,
       endpoint,
@@ -161,7 +161,7 @@ async function apiFetch<T>(
   }
 
   await logApiCall({
-    brandId: conn.brandId,
+    workspaceId: conn.workspaceId,
     userId: conn.userId,
     method,
     endpoint,
@@ -265,16 +265,16 @@ export async function createPin(
  * The selection comes from the per-platform cookie (set when the user picks
  * an account in the UI). Falls back to the most recent active connection.
  *
- * `brandId` is no longer used for selection (the user-facing model is
+ * `workspaceId` is no longer used for selection (the user-facing model is
  * platform-first, multi-account), but the param is kept for callers that
- * have already resolved a brand context.
+ * have already resolved a workspace context.
  */
 export async function loadActiveConnection(
-  brandIdOrUserId: string,
+  workspaceIdOrUserId: string,
   options?: { userId?: string }
 ): Promise<ConnectionWithTokens | null> {
-  // Backwards-compatible: if called with just brandId (legacy), still works
-  // via the brand lookup path. New callers should pass userId.
+  // Backwards-compatible: if called with just workspaceId (legacy), still
+  // works via the workspace lookup path. New callers should pass userId.
   const userId = options?.userId;
   if (userId) {
     const sel = await getCurrentConnection(userId, "pinterest");
@@ -283,7 +283,7 @@ export async function loadActiveConnection(
       where: { id: sel.id },
       select: {
         id: true,
-        brandId: true,
+        workspaceId: true,
         userId: true,
         accessToken: true,
         refreshToken: true,
@@ -295,11 +295,11 @@ export async function loadActiveConnection(
   }
 
   const conn = await prisma.platformConnection.findFirst({
-    where: { brandId: brandIdOrUserId, platform: "pinterest", status: "active" },
+    where: { workspaceId: workspaceIdOrUserId, platform: "pinterest", status: "active" },
     orderBy: { connectedAt: "desc" },
     select: {
       id: true,
-      brandId: true,
+      workspaceId: true,
       userId: true,
       accessToken: true,
       refreshToken: true,

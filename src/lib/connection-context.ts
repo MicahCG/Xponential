@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import type { Platform } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getDefaultBrandForUser } from "@/lib/brand-context";
+import { getDefaultWorkspaceForUser } from "@/lib/workspace-context";
 
 export function connectionCookieName(platform: Platform): string {
   return `xpo_${platform}_connection_id`;
@@ -22,9 +22,9 @@ export async function listConnectionsForPlatform(
   userId: string,
   platform: Platform
 ): Promise<ConnectionSummary[]> {
-  // Default brand acts as the implicit container; we don't surface brands in UI
-  // but every connection still lives under one. This works for users who only
-  // have a single brand (every existing user).
+  // Default workspace acts as the implicit container; we don't surface
+  // workspaces in UI but every connection still lives under one. This works
+  // for users who only have a single workspace (every existing user).
   const rows = await prisma.platformConnection.findMany({
     where: { userId, platform },
     orderBy: [{ status: "asc" }, { connectedAt: "desc" }],
@@ -120,10 +120,10 @@ export async function getCurrentConnection(
 }
 
 /**
- * Ensures the user has a brand to attach new connections to. Re-exports the
- * default-brand fetch under a connection-context-friendly name so callers
- * don't need to know brands exist.
+ * Ensures the user has a workspace to attach new connections to. Re-exports
+ * the default-workspace fetch under a connection-context-friendly name so
+ * callers don't need to know workspaces exist.
  */
-export async function getImplicitBrand(userId: string) {
-  return getDefaultBrandForUser(userId);
+export async function getImplicitWorkspace(userId: string) {
+  return getDefaultWorkspaceForUser(userId);
 }

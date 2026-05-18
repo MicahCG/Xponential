@@ -51,7 +51,7 @@ export default async function PinterestConnectPage() {
         accountId: true,
         scopes: true,
         tokenExpires: true,
-        brandId: true,
+        workspaceId: true,
       },
     });
     if (full) {
@@ -62,7 +62,7 @@ export default async function PinterestConnectPage() {
         tokenExpires: full.tokenExpires,
       };
       recentLogs = await prisma.pinterestApiLog.findMany({
-        where: { brandId: full.brandId },
+        where: { workspaceId: full.workspaceId },
         orderBy: { createdAt: "desc" },
         take: 3,
         select: {

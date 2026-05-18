@@ -24,7 +24,7 @@ export class TikTokApiError extends Error {
 }
 
 interface ApiLogEntry {
-  brandId: string;
+  workspaceId: string;
   userId: string;
   method: string;
   endpoint: string;
@@ -51,7 +51,7 @@ async function logApiCall(entry: ApiLogEntry): Promise<void> {
   try {
     await prisma.tikTokApiLog.create({
       data: {
-        brandId: entry.brandId,
+        workspaceId: entry.workspaceId,
         userId: entry.userId,
         method: entry.method,
         endpoint: entry.endpoint,
@@ -70,7 +70,7 @@ async function logApiCall(entry: ApiLogEntry): Promise<void> {
 
 interface ConnectionWithTokens {
   id: string;
-  brandId: string;
+  workspaceId: string;
   userId: string;
   accessToken: string;
   refreshToken: string | null;
@@ -145,7 +145,7 @@ async function apiFetch<T>(
     parsed = text ? JSON.parse(text) : null;
   } catch (err) {
     await logApiCall({
-      brandId: conn.brandId,
+      workspaceId: conn.workspaceId,
       userId: conn.userId,
       method,
       endpoint,
@@ -160,7 +160,7 @@ async function apiFetch<T>(
   }
 
   await logApiCall({
-    brandId: conn.brandId,
+    workspaceId: conn.workspaceId,
     userId: conn.userId,
     method,
     endpoint,
@@ -279,7 +279,7 @@ export async function fetchPublishStatus(
  * the UI. Falls back to the most recent active connection.
  */
 export async function loadActiveConnection(
-  brandIdOrUserId: string,
+  workspaceIdOrUserId: string,
   options?: { userId?: string }
 ): Promise<ConnectionWithTokens | null> {
   const userId = options?.userId;
@@ -290,7 +290,7 @@ export async function loadActiveConnection(
       where: { id: sel.id },
       select: {
         id: true,
-        brandId: true,
+        workspaceId: true,
         userId: true,
         accessToken: true,
         refreshToken: true,
@@ -302,11 +302,11 @@ export async function loadActiveConnection(
   }
 
   const conn = await prisma.platformConnection.findFirst({
-    where: { brandId: brandIdOrUserId, platform: "tiktok", status: "active" },
+    where: { workspaceId: workspaceIdOrUserId, platform: "tiktok", status: "active" },
     orderBy: { connectedAt: "desc" },
     select: {
       id: true,
-      brandId: true,
+      workspaceId: true,
       userId: true,
       accessToken: true,
       refreshToken: true,

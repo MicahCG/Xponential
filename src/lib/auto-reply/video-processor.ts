@@ -330,7 +330,7 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
       await prisma.postHistory.create({
         data: {
           userId: log.userId,
-          brandId: log.brandId,
+          workspaceId: log.workspaceId,
           platform: "x",
           postType: "reply",
           content: log.replyContent || "",

@@ -43,19 +43,19 @@ function getActorId(): string {
   return id;
 }
 
-async function getPinterestCookie(brandId: string, connectionId?: string): Promise<string> {
+async function getPinterestCookie(workspaceId: string, connectionId?: string): Promise<string> {
   const connection = connectionId
     ? await prisma.platformConnection.findFirst({
-        where: { id: connectionId, brandId },
+        where: { id: connectionId, workspaceId },
       })
     : await prisma.platformConnection.findFirst({
-        where: { brandId, platform: "pinterest", status: "active" },
+        where: { workspaceId, platform: "pinterest", status: "active" },
       });
 
   if (!connection) {
     throw new PinterestPostError({
       message:
-        "Pinterest account not connected for this brand. Connect Pinterest first.",
+        "Pinterest account not connected for this workspace. Connect Pinterest first.",
       isAuthError: true,
     });
   }
@@ -70,7 +70,7 @@ async function getPinterestCookie(brandId: string, connectionId?: string): Promi
 }
 
 export interface CreatePinInput {
-  brandId: string;
+  workspaceId: string;
   connectionId?: string;
   imageUrl: string;
   title: string;
@@ -120,7 +120,7 @@ export async function createPin(input: CreatePinInput): Promise<CreatePinResult>
     });
   }
 
-  const cookie = await getPinterestCookie(input.brandId, input.connectionId);
+  const cookie = await getPinterestCookie(input.workspaceId, input.connectionId);
   const token = getApifyToken();
   const actorId = getActorId();
 

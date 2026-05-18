@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import * as xOAuth from "@/lib/oauth/x";
 import * as pinterestOAuth from "@/lib/oauth/pinterest";
 import * as tiktokOAuth from "@/lib/oauth/tiktok";
-import { getCurrentBrand } from "@/lib/brand-context";
+import { getCurrentWorkspace } from "@/lib/workspace-context";
 
 export async function GET(
   request: NextRequest,
@@ -16,7 +16,7 @@ export async function GET(
   }
 
   const { platform } = await params;
-  const brand = await getCurrentBrand(session.user.id);
+  const workspace = await getCurrentWorkspace(session.user.id);
 
   const returnTo = request.nextUrl.searchParams.get("returnTo") || null;
 
@@ -31,7 +31,7 @@ export async function GET(
       data: {
         state,
         userId: session.user.id,
-        brandId: brand.id,
+        workspaceId: workspace.id,
         platform: "x",
         codeVerifier,
         returnTo,
@@ -77,7 +77,7 @@ export async function GET(
       data: {
         state,
         userId: session.user.id,
-        brandId: brand.id,
+        workspaceId: workspace.id,
         platform: "pinterest",
         returnTo,
         expiresAt: new Date(Date.now() + 10 * 60 * 1000),
@@ -129,7 +129,7 @@ export async function GET(
       data: {
         state,
         userId: session.user.id,
-        brandId: brand.id,
+        workspaceId: workspace.id,
         platform: "tiktok",
         returnTo,
         expiresAt: new Date(Date.now() + 10 * 60 * 1000),

@@ -166,7 +166,7 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
                   await prisma.autoReplyLog.create({
                     data: {
                       userId,
-                      brandId: account.brandId,
+                      workspaceId: account.workspaceId,
                       watchedAccountId: account.id,
                       targetTweetId: tweet.id,
                       targetTweetText: tweet.text,
@@ -210,7 +210,7 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
               await prisma.autoReplyLog.create({
                 data: {
                   userId,
-                  brandId: account.brandId,
+                  workspaceId: account.workspaceId,
                   watchedAccountId: account.id,
                   targetTweetId: tweet.id,
                   targetTweetText: tweet.text,
@@ -252,7 +252,7 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
                   await prisma.autoReplyLog.create({
                     data: {
                       userId,
-                      brandId: account.brandId,
+                      workspaceId: account.workspaceId,
                       watchedAccountId: account.id,
                       targetTweetId: tweet.id,
                       targetTweetText: tweet.text,
@@ -270,7 +270,7 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
                   await prisma.postHistory.create({
                     data: {
                       userId,
-                      brandId: account.brandId,
+                      workspaceId: account.workspaceId,
                       platform: "x",
                       postType: "reply",
                       content: replyContent,
@@ -292,7 +292,7 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
                   await prisma.autoReplyLog.create({
                     data: {
                       userId,
-                      brandId: account.brandId,
+                      workspaceId: account.workspaceId,
                       watchedAccountId: account.id,
                       targetTweetId: tweet.id,
                       targetTweetText: tweet.text,
@@ -318,7 +318,7 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
                 await prisma.autoReplyLog.create({
                   data: {
                     userId,
-                    brandId: account.brandId,
+                    workspaceId: account.workspaceId,
                     watchedAccountId: account.id,
                     targetTweetId: tweet.id,
                     targetTweetText: tweet.text,

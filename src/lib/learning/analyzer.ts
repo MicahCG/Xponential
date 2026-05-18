@@ -189,7 +189,7 @@ export async function runDailyLearning(): Promise<DailyLearningResult> {
     select: {
       id: true,
       userId: true,
-      brandId: true,
+      workspaceId: true,
       platform: true,
       postType: true,
       content: true,
@@ -202,16 +202,16 @@ export async function runDailyLearning(): Promise<DailyLearningResult> {
 
   if (posts.length === 0) return result;
 
-  // Group by userId + platform (brandId rides along so the upsert can write it)
+  // Group by userId + platform (workspaceId rides along so the upsert can write it)
   const byUserPlatform = new Map<
     string,
-    { userId: string; brandId: string; platform: Platform; posts: PostWithMetrics[] }
+    { userId: string; workspaceId: string; platform: Platform; posts: PostWithMetrics[] }
   >();
 
   for (const post of posts) {
     const key = `${post.userId}:${post.platform}`;
     if (!byUserPlatform.has(key)) {
-      byUserPlatform.set(key, { userId: post.userId, brandId: post.brandId, platform: post.platform, posts: [] });
+      byUserPlatform.set(key, { userId: post.userId, workspaceId: post.workspaceId, platform: post.platform, posts: [] });
     }
 
     const engagement = post.engagement as Record<string, number>;
@@ -232,7 +232,7 @@ export async function runDailyLearning(): Promise<DailyLearningResult> {
     });
   }
 
-  for (const { userId, brandId, platform, posts: userPosts } of byUserPlatform.values()) {
+  for (const { userId, workspaceId, platform, posts: userPosts } of byUserPlatform.values()) {
     result.usersProcessed++;
 
     // Sort by engagement score descending for the prompt
@@ -244,10 +244,10 @@ export async function runDailyLearning(): Promise<DailyLearningResult> {
       const analysis = await analyzeUserPosts(userId, platform, sorted);
       if (!analysis) continue;
 
-      // Upsert: one record per brand/platform/day
+      // Upsert: one record per workspace/platform/day
       await prisma.contentLearning.upsert({
         where: {
-          brandId_platform_date: { brandId, platform, date: analysisDate },
+          workspaceId_platform_date: { workspaceId, platform, date: analysisDate },
         },
         update: {
           insights: analysis.insights as object[],
@@ -256,7 +256,7 @@ export async function runDailyLearning(): Promise<DailyLearningResult> {
         },
         create: {
           userId,
-          brandId,
+          workspaceId,
           platform,
           date: analysisDate,
           insights: analysis.insights as object[],
