@@ -17,6 +17,9 @@ import {
   Clock,
   XCircle,
   Video,
+  Twitter,
+  Pin,
+  Music2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
@@ -36,7 +39,18 @@ interface AutoReplyLog {
   errorMessage: string | null;
   createdAt: string;
   postedAt: string | null;
-  watchedAccount: { accountHandle: string; platform: string };
+  watchedAccount: {
+    accountHandle: string;
+    platform: string;
+    platformConnection: { accountHandle: string | null } | null;
+  };
+}
+
+function PlatformIcon({ platform }: { platform: string }) {
+  if (platform === "x") return <Twitter className="h-3 w-3" />;
+  if (platform === "pinterest") return <Pin className="h-3 w-3" />;
+  if (platform === "tiktok") return <Music2 className="h-3 w-3" />;
+  return null;
 }
 
 // ─── Reply Feed (fetches + renders the full list) ───────────
@@ -294,10 +308,21 @@ function ReplyLogCard({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>@{reply.targetAuthor} tweeted</span>
-            <span>&middot;</span>
-            <span>
+          <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs">
+            <Badge variant="secondary" className="gap-1 px-1.5 py-0 text-[10px] uppercase">
+              <PlatformIcon platform={reply.watchedAccount.platform} />
+              {reply.watchedAccount.platform}
+            </Badge>
+            {reply.watchedAccount.platformConnection?.accountHandle && (
+              <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+                from @{reply.watchedAccount.platformConnection.accountHandle}
+              </Badge>
+            )}
+            <span className="text-muted-foreground">
+              → @{reply.targetAuthor}
+            </span>
+            <span className="text-muted-foreground">&middot;</span>
+            <span className="text-muted-foreground">
               {formatDistanceToNow(new Date(reply.createdAt), {
                 addSuffix: true,
               })}

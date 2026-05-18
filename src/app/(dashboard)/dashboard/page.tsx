@@ -6,7 +6,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Link2, Brain, PenTool, History } from "lucide-react";
+import { Link2, Brain, PenTool, History, Twitter, Pin, Music2 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth-helpers";
@@ -44,9 +44,33 @@ export default async function DashboardPage() {
         postType: true,
         content: true,
         postedAt: true,
+        targetAuthor: true,
       },
     }),
   ]);
+
+  // For each post we'd like to know "which connected account did this go from?"
+  // PostHistory doesn't store a direct platformConnectionId, so fall back to
+  // the user's connection handles per platform.
+  const connectionHandleByPlatform = new Map<string, string[]>();
+  for (const c of connections) {
+    if (c.status !== "active" || !c.accountHandle) continue;
+    const list = connectionHandleByPlatform.get(c.platform) ?? [];
+    list.push(c.accountHandle);
+    connectionHandleByPlatform.set(c.platform, list);
+  }
+  function fromHandleHint(platform: string): string | null {
+    const list = connectionHandleByPlatform.get(platform);
+    if (!list || list.length === 0) return null;
+    if (list.length === 1) return list[0];
+    return `${list.length} accounts`;
+  }
+  function PlatformIcon({ platform }: { platform: string }) {
+    if (platform === "x") return <Twitter className="h-3 w-3" />;
+    if (platform === "pinterest") return <Pin className="h-3 w-3" />;
+    if (platform === "tiktok") return <Music2 className="h-3 w-3" />;
+    return null;
+  }
 
   const activeConnections = connections.filter((c) => c.status === "active");
 
@@ -136,16 +160,30 @@ export default async function DashboardPage() {
             <h2 className="text-lg font-semibold">Recent Posts</h2>
           </div>
           <div className="space-y-2">
-            {recentPosts.map((post) => (
-              <Card key={post.id}>
-                <CardContent className="flex items-center gap-3 py-3">
-                  <Badge variant="outline" className="shrink-0 capitalize">
-                    {post.platform}
-                  </Badge>
-                  <p className="truncate text-sm">{post.content}</p>
-                </CardContent>
-              </Card>
-            ))}
+            {recentPosts.map((post) => {
+              const sourceHandle = fromHandleHint(post.platform);
+              return (
+                <Card key={post.id}>
+                  <CardContent className="flex items-center gap-3 py-3">
+                    <Badge variant="secondary" className="shrink-0 gap-1 capitalize">
+                      <PlatformIcon platform={post.platform} />
+                      {post.platform}
+                    </Badge>
+                    {sourceHandle && (
+                      <Badge variant="outline" className="shrink-0 text-xs">
+                        from @{sourceHandle}
+                      </Badge>
+                    )}
+                    {post.targetAuthor && (
+                      <Badge variant="outline" className="shrink-0 text-xs">
+                        → @{post.targetAuthor}
+                      </Badge>
+                    )}
+                    <p className="truncate text-sm">{post.content}</p>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}

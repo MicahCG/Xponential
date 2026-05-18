@@ -3,23 +3,39 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 /**
- * GET /api/settings/twitter-cookie
+ * Resolve which X connection to operate on. Accepts ?connectionId=X for
+ * multi-account use; falls back to the user's first active X connection
+ * for legacy single-account callers.
+ */
+async function resolveConnection(userId: string, request: NextRequest) {
+  const cid = request.nextUrl.searchParams.get("connectionId");
+  if (cid) {
+    return prisma.platformConnection.findFirst({
+      where: { id: cid, userId, platform: "x" },
+    });
+  }
+  return prisma.platformConnection.findFirst({
+    where: { userId, platform: "x", status: "active" },
+    orderBy: { connectedAt: "desc" },
+  });
+}
+
+/**
+ * GET /api/settings/twitter-cookie?connectionId=X
  * Returns whether a Twitter cookie is configured (not the cookie itself for security).
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const connection = await prisma.platformConnection.findFirst({
-    where: { userId: session.user.id, platform: "x", status: "active" },
-    select: { twitterCookie: true },
-  });
+  const connection = await resolveConnection(session.user.id, request);
 
   return NextResponse.json({
+    connectionId: connection?.id ?? null,
+    accountHandle: connection?.accountHandle ?? null,
     hasCookie: !!connection?.twitterCookie,
-    // Show a preview so the user knows which cookie is stored
     cookiePreview: connection?.twitterCookie
       ? connection.twitterCookie.substring(0, 40) + "..."
       : null,
@@ -27,8 +43,8 @@ export async function GET() {
 }
 
 /**
- * PUT /api/settings/twitter-cookie
- * Saves the Twitter cookie to the user's X platform connection.
+ * PUT /api/settings/twitter-cookie?connectionId=X
+ * Saves the Twitter cookie to the specified X platform connection.
  */
 export async function PUT(request: NextRequest) {
   const session = await auth();
@@ -46,7 +62,6 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  // Must be the full Header String format — needs both auth_token and ct0
   if (!cookie.includes("ct0=")) {
     return NextResponse.json(
       {
@@ -57,11 +72,7 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  // Find the user's X platform connection
-  const connection = await prisma.platformConnection.findFirst({
-    where: { userId: session.user.id, platform: "x", status: "active" },
-  });
-
+  const connection = await resolveConnection(session.user.id, request);
   if (!connection) {
     return NextResponse.json(
       {
@@ -72,29 +83,25 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  // Save the cookie
   await prisma.platformConnection.update({
     where: { id: connection.id },
     data: { twitterCookie: cookie.trim() },
   });
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, connectionId: connection.id });
 }
 
 /**
- * DELETE /api/settings/twitter-cookie
- * Removes the stored Twitter cookie.
+ * DELETE /api/settings/twitter-cookie?connectionId=X
+ * Removes the stored Twitter cookie from the specified connection.
  */
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const connection = await prisma.platformConnection.findFirst({
-    where: { userId: session.user.id, platform: "x", status: "active" },
-  });
-
+  const connection = await resolveConnection(session.user.id, request);
   if (!connection) {
     return NextResponse.json(
       { error: "X account not connected" },

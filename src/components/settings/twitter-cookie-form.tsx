@@ -17,9 +17,14 @@ import { Loader2, Check, Trash2, Cookie } from "lucide-react";
 interface TwitterCookieFormProps {
   /** When set, redirect to this URL after a successful save instead of showing a success message */
   onSaveRedirect?: string;
+  /** When set, target a specific X PlatformConnection. Defaults to the user's first active X connection. */
+  connectionId?: string;
 }
 
-export function TwitterCookieForm({ onSaveRedirect }: TwitterCookieFormProps) {
+export function TwitterCookieForm({ onSaveRedirect, connectionId }: TwitterCookieFormProps) {
+  const apiUrl = connectionId
+    ? `/api/settings/twitter-cookie?connectionId=${encodeURIComponent(connectionId)}`
+    : "/api/settings/twitter-cookie";
   const router = useRouter();
   const [cookie, setCookie] = useState("");
   const [hasCookie, setHasCookie] = useState(false);
@@ -34,7 +39,7 @@ export function TwitterCookieForm({ onSaveRedirect }: TwitterCookieFormProps) {
   useEffect(() => {
     async function fetchStatus() {
       try {
-        const res = await fetch("/api/settings/twitter-cookie");
+        const res = await fetch(apiUrl);
         if (res.ok) {
           const data = await res.json();
           setHasCookie(data.hasCookie);
@@ -60,7 +65,7 @@ export function TwitterCookieForm({ onSaveRedirect }: TwitterCookieFormProps) {
     setSuccess(null);
 
     try {
-      const res = await fetch("/api/settings/twitter-cookie", {
+      const res = await fetch(apiUrl, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cookie: cookie.trim() }),
@@ -95,7 +100,7 @@ export function TwitterCookieForm({ onSaveRedirect }: TwitterCookieFormProps) {
     setSuccess(null);
 
     try {
-      const res = await fetch("/api/settings/twitter-cookie", {
+      const res = await fetch(apiUrl, {
         method: "DELETE",
       });
 

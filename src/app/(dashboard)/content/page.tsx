@@ -272,13 +272,11 @@ function XTab({ connectionId }: { connectionId?: string }) {
           setSavedInstructions(profile.replyInstructions);
         }
 
-        if (fetched.length === 0) {
-          setHasProfile(!!profile?.id);
-          setOnboardingStep("analyze");
-        } else {
-          setOnboardingStep(null);
-          setHasProfile(true);
-        }
+        // We no longer force users through the X-API-based analyze step
+        // (that endpoint is dead since the X API was blocked). Just land
+        // them in the management UI where they can add accounts manually.
+        setOnboardingStep(null);
+        setHasProfile(!!profile?.id);
       }
     } catch {
       // Silently fail
@@ -328,11 +326,6 @@ function XTab({ connectionId }: { connectionId?: string }) {
       );
       const data = await res.json().catch(() => ({}));
       setAddError(data.error ?? "Failed to update account");
-    } else {
-      const updated = accounts.map((a) =>
-        a.id === id ? { ...a, isEnabled } : a
-      );
-      if (updated.every((a) => !a.isEnabled)) setOnboardingStep("select");
     }
   };
 
@@ -373,9 +366,6 @@ function XTab({ connectionId }: { connectionId?: string }) {
     const next = accounts.filter((a) => a.id !== id);
     setAccounts(next);
     await fetch(`/api/watched-accounts/${id}`, { method: "DELETE" });
-    if (next.length === 0) {
-      setOnboardingStep(hasProfile ? "select" : "analyze");
-    }
   };
 
   const handleAdd = async () => {
@@ -598,12 +588,11 @@ export default function AutoReplyPage() {
   const [loadingConnections, setLoadingConnections] = useState(true);
 
   useEffect(() => {
-    fetch("/api/connect/list")
+    fetch("/api/connect/list?platform=x")
       .then((res) => res.json())
       .then((data: XConnection[]) => {
-        const xConns = data.filter(
-          (c: XConnection) => c.status === "active"
-        );
+        // Endpoint already filters by platform=x; keep the active filter here
+        const xConns = data.filter((c) => c.status === "active");
         setConnections(xConns);
         if (xConns.length > 0 && !selectedConnectionId) {
           setSelectedConnectionId(xConns[0].id);
@@ -630,18 +619,18 @@ export default function AutoReplyPage() {
             Manage your AI agent on X
           </p>
         </div>
-        {connections.length > 1 && (
+        {connections.length > 0 && (
           <Select
             value={selectedConnectionId ?? ""}
             onValueChange={setSelectedConnectionId}
           >
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Select account" />
+            <SelectTrigger className="w-56">
+              <SelectValue placeholder="Select X account" />
             </SelectTrigger>
             <SelectContent>
               {connections.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
-                  @{c.accountHandle}
+                  X · @{c.accountHandle}
                 </SelectItem>
               ))}
             </SelectContent>

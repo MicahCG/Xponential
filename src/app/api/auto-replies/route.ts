@@ -28,7 +28,13 @@ export async function GET() {
       errorMessage: true,
       createdAt: true,
       postedAt: true,
-      watchedAccount: { select: { accountHandle: true, platform: true } },
+      watchedAccount: {
+        select: {
+          accountHandle: true,
+          platform: true,
+          platformConnection: { select: { accountHandle: true } },
+        },
+      },
     },
   });
 

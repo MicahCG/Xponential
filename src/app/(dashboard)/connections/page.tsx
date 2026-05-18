@@ -142,7 +142,7 @@ export default async function ConnectionsHubPage() {
           iconBg="bg-foreground"
           icon={<Twitter className="h-5 w-5 text-background" />}
           accounts={xAccounts}
-          manageHref="/connections/x/cookie-setup"
+          manageHref="/connections/x"
           openHref="/content"
           openLabel="Open auto-replies"
           connectHref="/api/connect/start/x"
