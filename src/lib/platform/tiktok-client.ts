@@ -319,3 +319,29 @@ export async function loadActiveConnection(
   if (!conn || !conn.accessToken) return null;
   return conn;
 }
+
+/**
+ * Load a TikTok connection by its ID, verifying it belongs to the calling
+ * user. Used when a Channel (or any scheduled job) has already chosen which
+ * connection to use — bypasses the cookie-based selection so the post
+ * routes to the explicitly-targeted account, not whichever one the user
+ * has selected in the UI most recently.
+ */
+export async function loadConnectionById(
+  connectionId: string,
+  userId: string
+): Promise<ConnectionWithTokens | null> {
+  const conn = await prisma.platformConnection.findFirst({
+    where: { id: connectionId, userId, platform: "tiktok" },
+    select: {
+      id: true,
+      workspaceId: true,
+      userId: true,
+      accessToken: true,
+      refreshToken: true,
+      tokenExpires: true,
+    },
+  });
+  if (!conn || !conn.accessToken) return null;
+  return conn;
+}

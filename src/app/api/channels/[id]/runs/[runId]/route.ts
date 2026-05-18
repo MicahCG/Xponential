@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getMovie, normalizeStatus, PopcornError } from "@/lib/popcorn/client";
 import {
-  loadActiveConnection,
+  loadConnectionById,
   initDraftUpload,
   TikTokApiError,
 } from "@/lib/platform/tiktok-client";
@@ -107,9 +107,13 @@ export async function GET(
 
   // 2. If we have a video URL and haven't posted yet, post to TikTok now.
   if (run.status === "ready" && run.videoUrl) {
-    const conn = await loadActiveConnection(run.channel.connectionId, {
-      userId: session.user.id,
-    });
+    // Load the EXACT connection the channel targets — not the user's currently
+    // cookie-selected TikTok account. This is critical when the user has
+    // multiple TikTok accounts connected.
+    const conn = await loadConnectionById(
+      run.channel.connectionId,
+      session.user.id
+    );
     if (!conn) {
       run = await prisma.channelRun.update({
         where: { id: run.id },
