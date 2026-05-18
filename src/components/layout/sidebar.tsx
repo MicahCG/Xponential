@@ -7,23 +7,19 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
-  Brain,
-  MessageSquareReply,
   Settings,
   PanelLeftClose,
-  Clapperboard,
   BarChart2,
   Pin,
   Link as LinkIcon,
   Music2,
+  Twitter,
 } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/connections", label: "Connections", icon: LinkIcon },
-  { href: "/content", label: "Auto-Replies", icon: MessageSquareReply },
-  { href: "/personality", label: "Personality", icon: Brain },
-  { href: "/video", label: "Video Studio", icon: Clapperboard },
+  { href: "/content", label: "X / Twitter", icon: Twitter },
   { href: "/pinterest", label: "Pinterest", icon: Pin },
   { href: "/tiktok", label: "TikTok", icon: Music2 },
   { href: "/analytics", label: "Analytics", icon: BarChart2 },
@@ -77,7 +73,10 @@ export function Sidebar() {
         {navItems.map((item) => {
           const isActive =
             pathname === item.href ||
-            (item.href !== "/dashboard" && pathname.startsWith(item.href));
+            (item.href !== "/dashboard" && pathname.startsWith(item.href)) ||
+            // /content is the X / Twitter hub; treat /personality as part of
+            // the same nav group so the tab stays highlighted across both.
+            (item.href === "/content" && pathname.startsWith("/personality"));
           return (
             <Link
               key={item.href}

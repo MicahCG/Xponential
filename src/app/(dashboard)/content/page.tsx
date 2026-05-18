@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { AnalyzeStep } from "@/components/setup/analyze-step";
 import { AccountsStep } from "@/components/setup/accounts-step";
 import { ReplyFeed } from "@/components/auto-replies/reply-feed";
+import { XTabs } from "@/components/x/x-tabs";
 import { formatDistanceToNow } from "date-fns";
 
 // ─── Types ──────────────────────────────────────────────────
@@ -612,6 +613,7 @@ export default function AutoReplyPage() {
 
   return (
     <div className="space-y-6">
+      <XTabs />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Auto-Replies</h1>

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TikTokMethodStatus } from "@/components/connections/tiktok-method-status";
 import { PlatformAccountPicker } from "@/components/connections/platform-account-picker";
+import { TikTokTemplateCard } from "@/components/tiktok/tiktok-template-card";
 import {
   Music2,
   Send,
@@ -94,9 +95,9 @@ export default async function TikTokPage() {
           )}
           {apiConnected ? (
             <Link href="/tiktok/compose">
-              <Button>
+              <Button variant="outline">
                 <Send className="mr-2 h-4 w-4" />
-                Send draft
+                Send video URL
               </Button>
             </Link>
           ) : (
@@ -111,6 +112,13 @@ export default async function TikTokPage() {
       </div>
 
       <TikTokMethodStatus apiConnected={apiConnected} />
+
+      {apiConnected && current && (
+        <TikTokTemplateCard
+          connectionId={current.id}
+          accountHandle={current.accountHandle}
+        />
+      )}
 
       {apiConnected && drafts.length === 0 && (
         <Card>

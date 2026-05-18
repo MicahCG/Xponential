@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 import { ProfileDisplay } from "@/components/personality/profile-display";
 import { FeedbackForm } from "@/components/personality/feedback-form";
+import { XTabs } from "@/components/x/x-tabs";
 import type { PersonalityProfile } from "@/lib/personality/types";
 
 export default async function PersonalityPage() {
@@ -15,6 +16,7 @@ export default async function PersonalityPage() {
 
   return (
     <div className="space-y-6">
+      <XTabs />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
