@@ -172,8 +172,20 @@ async function apiFetch<T>(
   });
 
   if (!res.ok) {
+    // Pull TikTok's structured error code/message out of the envelope when
+    // present so the surface error tells the user what actually failed
+    // (e.g. "url_ownership_unverified") instead of a bare HTTP code.
+    const env = parsed as
+      | { error?: { code?: string; message?: string } }
+      | null;
+    const code = env?.error?.code;
+    const detail = env?.error?.message;
+    const suffix =
+      code || detail
+        ? ` — ${[code, detail].filter(Boolean).join(": ")}`
+        : "";
     throw new TikTokApiError({
-      message: `TikTok API error (HTTP ${res.status})`,
+      message: `TikTok API error (HTTP ${res.status})${suffix}`,
       httpCode: res.status,
       responseBody: parsed,
     });
