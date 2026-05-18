@@ -4,12 +4,17 @@
     "src/app/api/cron/process-video-posts/route.ts": { "maxDuration": 300 },
     "src/app/api/cron/evolve-profiles/route.ts": { "maxDuration": 300 },
     "src/app/api/cron/x-original-posts/route.ts": { "maxDuration": 300 },
+    "src/app/api/cron/advance-channel-runs/route.ts": { "maxDuration": 300 },
     "src/app/api/video/post/route.ts": { "maxDuration": 300 }
   },
   "crons": [
     {
       "path": "/api/cron/auto-reply",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/advance-channel-runs",
+      "schedule": "*/3 * * * *"
     },
     {
       "path": "/api/cron/process-videos",
