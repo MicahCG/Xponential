@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createMovie, PopcornError } from "@/lib/popcorn/client";
+import { generateBriefFromTemplate } from "@/lib/video/brief-generator";
 
 /**
  * Kick off a new ChannelRun. Creates the row, calls Popcorn to start movie
@@ -42,7 +43,7 @@ export async function POST(
   }
 
   // Create a pending run row first so the UI can poll immediately even if
-  // Popcorn is slow to respond.
+  // brief generation or Popcorn is slow to respond.
   const run = await prisma.channelRun.create({
     data: {
       channelId: channel.id,
@@ -53,8 +54,22 @@ export async function POST(
   });
 
   try {
+    // Step 1 — distill the (possibly long) template into a sub-5000-char
+    // brief Popcorn can consume. Short templates pass through unchanged.
+    const { brief, distilled } = await generateBriefFromTemplate(
+      channel.promptTemplate
+    );
+
+    // Capture the actual brief sent to Popcorn so the UI/audit shows what
+    // ran, not just the source template.
+    await prisma.channelRun.update({
+      where: { id: run.id },
+      data: { promptUsed: brief },
+    });
+
+    // Step 2 — kick off the Popcorn movie with the distilled brief.
     const movie = await createMovie({
-      brief: channel.promptTemplate,
+      brief,
       duration: channel.durationSec ?? undefined,
       orientation:
         (channel.orientation as "portrait" | "landscape" | "square" | null) ??
@@ -72,6 +87,8 @@ export async function POST(
       runId: run.id,
       popcornMovieId: movie.id,
       status: "generating",
+      briefDistilled: distilled,
+      briefCharCount: brief.length,
     });
   } catch (err) {
     const message =
