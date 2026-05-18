@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { refreshAccessToken } from "@/lib/oauth/pinterest";
+import { getCurrentConnection } from "@/lib/connection-context";
 
 const API_BASE = "https://api.pinterest.com/v5";
 
@@ -259,9 +260,43 @@ export async function createPin(
 
 // ─── Connection loader ──────────────────────────────────────────
 
-export async function loadActiveConnection(brandId: string): Promise<ConnectionWithTokens | null> {
+/**
+ * Loads the currently-selected Pinterest connection for the calling user.
+ * The selection comes from the per-platform cookie (set when the user picks
+ * an account in the UI). Falls back to the most recent active connection.
+ *
+ * `brandId` is no longer used for selection (the user-facing model is
+ * platform-first, multi-account), but the param is kept for callers that
+ * have already resolved a brand context.
+ */
+export async function loadActiveConnection(
+  brandIdOrUserId: string,
+  options?: { userId?: string }
+): Promise<ConnectionWithTokens | null> {
+  // Backwards-compatible: if called with just brandId (legacy), still works
+  // via the brand lookup path. New callers should pass userId.
+  const userId = options?.userId;
+  if (userId) {
+    const sel = await getCurrentConnection(userId, "pinterest");
+    if (!sel || !sel.hasAccessToken) return null;
+    const full = await prisma.platformConnection.findUnique({
+      where: { id: sel.id },
+      select: {
+        id: true,
+        brandId: true,
+        userId: true,
+        accessToken: true,
+        refreshToken: true,
+        tokenExpires: true,
+      },
+    });
+    if (!full || !full.accessToken) return null;
+    return full;
+  }
+
   const conn = await prisma.platformConnection.findFirst({
-    where: { brandId, platform: "pinterest", status: "active" },
+    where: { brandId: brandIdOrUserId, platform: "pinterest", status: "active" },
+    orderBy: { connectedAt: "desc" },
     select: {
       id: true,
       brandId: true,

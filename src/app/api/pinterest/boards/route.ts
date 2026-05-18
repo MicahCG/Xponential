@@ -14,7 +14,7 @@ export async function GET() {
   }
   const brand = await getCurrentBrand(session.user.id);
 
-  const conn = await loadActiveConnection(brand.id);
+  const conn = await loadActiveConnection(brand.id, { userId: session.user.id });
   if (!conn || !conn.accessToken) {
     return NextResponse.json({ boards: [], hasApiConnection: false });
   }

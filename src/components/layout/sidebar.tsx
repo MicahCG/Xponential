@@ -79,13 +79,18 @@ export function Sidebar({ currentBrand, brands }: SidebarProps) {
         )}
       </div>
 
-      <div className={cn("border-b", collapsed ? "p-2" : "p-3")}>
-        <BrandSwitcher
-          currentBrand={currentBrand}
-          brands={brands}
-          collapsed={collapsed}
-        />
-      </div>
+      {/* BrandSwitcher hidden: the user-facing model is now platform-first
+          with multi-account per platform. Brand still exists in DB as an
+          implicit container; bring this back if multi-brand UI is desired. */}
+      {false && (
+        <div className={cn("border-b", collapsed ? "p-2" : "p-3")}>
+          <BrandSwitcher
+            currentBrand={currentBrand}
+            brands={brands}
+            collapsed={collapsed}
+          />
+        </div>
+      )}
 
       <nav className={cn("flex-1 space-y-1", collapsed ? "p-2" : "p-3")}>
         {navItems.map((item) => {

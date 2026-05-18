@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
-import { getCurrentBrand } from "@/lib/brand-context";
+import {
+  getCurrentConnection,
+  listConnectionsForPlatform,
+} from "@/lib/connection-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TikTokMethodStatus } from "@/components/connections/tiktok-method-status";
+import { PlatformAccountPicker } from "@/components/connections/platform-account-picker";
 import {
   Music2,
   Send,
@@ -18,24 +22,19 @@ export const metadata = { title: "TikTok - Xponential" };
 
 export default async function TikTokPage() {
   const session = await requireAuth();
-  const brand = await getCurrentBrand(session.user!.id as string);
+  const userId = session.user!.id as string;
 
-  const connection = await prisma.platformConnection.findFirst({
-    where: { brandId: brand.id, platform: "tiktok" },
-    select: {
-      accountHandle: true,
-      accessToken: true,
-      status: true,
-    },
-  });
+  const [accounts, current] = await Promise.all([
+    listConnectionsForPlatform(userId, "tiktok"),
+    getCurrentConnection(userId, "tiktok"),
+  ]);
 
-  const apiConnected =
-    !!connection?.accessToken && connection.status === "active";
+  const apiConnected = !!current && current.hasAccessToken && current.status === "active";
 
-  const drafts = apiConnected
+  const drafts = apiConnected && current
     ? await prisma.postHistory.findMany({
         where: {
-          brandId: brand.id,
+          userId,
           platform: "tiktok",
           postingMethod: "tiktok_api",
         },
@@ -53,30 +52,28 @@ export default async function TikTokPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Music2 className="h-6 w-6" />
             TikTok
           </h1>
-          <p className="text-muted-foreground">
-            {apiConnected ? (
-              <>
-                Connected as{" "}
-                <span className="font-medium text-foreground">
-                  @{connection!.accountHandle}
-                </span>{" "}
-                for{" "}
-                <span className="font-medium text-foreground">{brand.name}</span>.
-              </>
-            ) : (
-              <>
-                No TikTok connection on{" "}
-                <span className="font-medium text-foreground">{brand.name}</span>{" "}
-                yet.
-              </>
-            )}
-          </p>
+          {accounts.length > 0 && (
+            <div className="mt-2">
+              <PlatformAccountPicker
+                platform="tiktok"
+                accounts={accounts}
+                currentId={current?.id ?? null}
+                connectHref="/api/connect/start/tiktok"
+                label="TikTok account"
+              />
+            </div>
+          )}
+          {accounts.length === 0 && (
+            <p className="mt-1 text-muted-foreground">
+              No TikTok accounts connected yet.
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {apiConnected && (
@@ -84,7 +81,7 @@ export default async function TikTokPage() {
               <Link href="/connections/tiktok">
                 <Button variant="outline">
                   <Settings2 className="mr-2 h-4 w-4" />
-                  Manage connection
+                  Manage accounts
                 </Button>
               </Link>
               <Link href="/tiktok/logs">
@@ -118,7 +115,7 @@ export default async function TikTokPage() {
       {apiConnected && drafts.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            No drafts sent yet. Compose your first video draft.
+            No drafts sent yet from @{current?.accountHandle ?? "this account"}.
           </CardContent>
         </Card>
       )}

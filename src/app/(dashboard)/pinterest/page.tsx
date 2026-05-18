@@ -1,34 +1,53 @@
 import Link from "next/link";
 import { requireAuth } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
-import { getCurrentBrand } from "@/lib/brand-context";
+import {
+  getCurrentConnection,
+  listConnectionsForPlatform,
+} from "@/lib/connection-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PinterestMethodStatus } from "@/components/connections/pinterest-method-status";
-import { Pin, Plus, LogIn, ShieldCheck, FileText, Settings2 } from "lucide-react";
+import { PlatformAccountPicker } from "@/components/connections/platform-account-picker";
+import {
+  Pin,
+  Plus,
+  LogIn,
+  ShieldCheck,
+  FileText,
+  Settings2,
+} from "lucide-react";
 
 export const metadata = { title: "Pinterest - Xponential" };
 
 export default async function PinterestPage() {
   const session = await requireAuth();
-  const brand = await getCurrentBrand(session.user!.id as string);
+  const userId = session.user!.id as string;
 
-  const connection = await prisma.platformConnection.findFirst({
-    where: { brandId: brand.id, platform: "pinterest" },
-    select: {
-      accountHandle: true,
-      accessToken: true,
-      status: true,
-    },
-  });
+  const [accounts, current] = await Promise.all([
+    listConnectionsForPlatform(userId, "pinterest"),
+    getCurrentConnection(userId, "pinterest"),
+  ]);
 
-  const apiConnected =
-    !!connection?.accessToken && connection.status === "active";
+  const apiConnected = !!current && current.hasAccessToken && current.status === "active";
 
-  const pins = apiConnected
-    ? await prisma.postHistory.findMany({
+  // Pull pins for the currently-selected connection's brand
+  let pins: Array<{
+    id: string;
+    content: string;
+    imageUrl: string | null;
+    platformPostId: string | null;
+    postedAt: Date;
+  }> = [];
+  if (apiConnected && current) {
+    const full = await prisma.platformConnection.findUnique({
+      where: { id: current.id },
+      select: { brandId: true },
+    });
+    if (full) {
+      pins = await prisma.postHistory.findMany({
         where: {
-          brandId: brand.id,
+          brandId: full.brandId,
           platform: "pinterest",
           postingMethod: "pinterest_api",
         },
@@ -41,35 +60,33 @@ export default async function PinterestPage() {
           platformPostId: true,
           postedAt: true,
         },
-      })
-    : [];
+      });
+    }
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Pin className="h-6 w-6" />
             Pinterest
           </h1>
-          <p className="text-muted-foreground">
-            {apiConnected ? (
-              <>
-                Connected as{" "}
-                <span className="font-medium text-foreground">
-                  @{connection!.accountHandle}
-                </span>{" "}
-                for{" "}
-                <span className="font-medium text-foreground">{brand.name}</span>.
-              </>
-            ) : (
-              <>
-                No Pinterest connection on{" "}
-                <span className="font-medium text-foreground">{brand.name}</span>{" "}
-                yet.
-              </>
-            )}
-          </p>
+          {accounts.length > 0 ? (
+            <div className="mt-2">
+              <PlatformAccountPicker
+                platform="pinterest"
+                accounts={accounts}
+                currentId={current?.id ?? null}
+                connectHref="/api/connect/start/pinterest"
+                label="Pinterest account"
+              />
+            </div>
+          ) : (
+            <p className="mt-1 text-muted-foreground">
+              No Pinterest accounts connected yet.
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {apiConnected && (
@@ -77,7 +94,7 @@ export default async function PinterestPage() {
               <Link href="/connections/pinterest">
                 <Button variant="outline">
                   <Settings2 className="mr-2 h-4 w-4" />
-                  Manage connection
+                  Manage accounts
                 </Button>
               </Link>
               <Link href="/pinterest/logs">
@@ -111,7 +128,7 @@ export default async function PinterestPage() {
       {apiConnected && pins.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            No pins published yet. Compose your first one.
+            No pins published yet from @{current?.accountHandle ?? "this account"}.
           </CardContent>
         </Card>
       )}

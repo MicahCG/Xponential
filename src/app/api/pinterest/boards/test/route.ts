@@ -19,7 +19,7 @@ export async function POST() {
   }
   const brand = await getCurrentBrand(session.user.id);
 
-  const conn = await loadActiveConnection(brand.id);
+  const conn = await loadActiveConnection(brand.id, { userId: session.user.id });
   if (!conn) {
     return NextResponse.json(
       { error: "Pinterest API is not connected for this brand." },

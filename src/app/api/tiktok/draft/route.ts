@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const conn = await loadActiveConnection(brand.id);
+  const conn = await loadActiveConnection(brand.id, { userId: session.user.id });
   if (!conn) {
     return NextResponse.json(
       { error: "TikTok is not connected for this brand. Connect Login Kit first." },

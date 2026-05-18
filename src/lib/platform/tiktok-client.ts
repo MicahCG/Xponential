@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { refreshAccessToken } from "@/lib/oauth/tiktok";
+import { getCurrentConnection } from "@/lib/connection-context";
 
 const API_BASE = "https://open.tiktokapis.com/v2";
 
@@ -272,9 +273,37 @@ export async function fetchPublishStatus(
 
 // ─── Connection loader ──────────────────────────────────────────
 
-export async function loadActiveConnection(brandId: string): Promise<ConnectionWithTokens | null> {
+/**
+ * Loads the currently-selected TikTok connection for the calling user.
+ * Honors the per-platform cookie set when the user picks an account in
+ * the UI. Falls back to the most recent active connection.
+ */
+export async function loadActiveConnection(
+  brandIdOrUserId: string,
+  options?: { userId?: string }
+): Promise<ConnectionWithTokens | null> {
+  const userId = options?.userId;
+  if (userId) {
+    const sel = await getCurrentConnection(userId, "tiktok");
+    if (!sel || !sel.hasAccessToken) return null;
+    const full = await prisma.platformConnection.findUnique({
+      where: { id: sel.id },
+      select: {
+        id: true,
+        brandId: true,
+        userId: true,
+        accessToken: true,
+        refreshToken: true,
+        tokenExpires: true,
+      },
+    });
+    if (!full || !full.accessToken) return null;
+    return full;
+  }
+
   const conn = await prisma.platformConnection.findFirst({
-    where: { brandId, platform: "tiktok", status: "active" },
+    where: { brandId: brandIdOrUserId, platform: "tiktok", status: "active" },
+    orderBy: { connectedAt: "desc" },
     select: {
       id: true,
       brandId: true,

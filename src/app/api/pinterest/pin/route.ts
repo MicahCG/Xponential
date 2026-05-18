@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const conn = await loadActiveConnection(brand.id);
+    const conn = await loadActiveConnection(brand.id, { userId: session.user.id });
     if (!conn || !conn.accessToken) {
       return NextResponse.json(
         {
