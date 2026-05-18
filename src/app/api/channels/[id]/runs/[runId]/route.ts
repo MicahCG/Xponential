@@ -88,9 +88,23 @@ export async function GET(
           },
         });
         // Fall through to step 2 immediately so we don't waste a poll cycle.
+      } else if (norm === "ready" && !movie.videoUrl) {
+        // Popcorn says ready but our parser couldn't find a video URL. Don't
+        // mark the run as failed yet — Popcorn sometimes flips ready before
+        // the final asset URL is exposed. Return with a clear hint so the UI
+        // shows what's going on; the next poll re-checks.
+        return NextResponse.json({
+          run: stripJoin(run),
+          popcornStatus: movie.status,
+          popcornHint:
+            "Popcorn reports ready but no video URL is in the response yet. Retrying…",
+        });
       } else {
-        // Still generating, return current.
-        return NextResponse.json({ run: stripJoin(run), popcornStatus: movie.status });
+        // Still generating, return current with popcornStatus for the UI.
+        return NextResponse.json({
+          run: stripJoin(run),
+          popcornStatus: movie.status,
+        });
       }
     } catch (err) {
       if (err instanceof PopcornError) {

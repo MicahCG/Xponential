@@ -324,26 +324,101 @@ export interface PopcornMovieState {
   raw?: unknown;
 }
 
+/** Recursively walk an object/array and pick the first plausible video URL. */
+function findVideoUrl(node: unknown, depth = 0): string | null {
+  if (depth > 6 || node == null) return null;
+  if (typeof node === "string") {
+    const match = node.match(
+      /https?:\/\/[^\s"'<>]+\.(?:mp4|mov|webm|m3u8)(?:\?[^\s"'<>]*)?/i
+    );
+    return match ? match[0] : null;
+  }
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const hit = findVideoUrl(item, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  }
+  if (typeof node === "object") {
+    const obj = node as Record<string, unknown>;
+    const prioritized = [
+      "video_url",
+      "videoUrl",
+      "mp4_url",
+      "download_url",
+      "downloadUrl",
+      "final_video_url",
+      "final_url",
+      "media_url",
+      "mediaUrl",
+      "url",
+    ];
+    for (const k of prioritized) {
+      const v = obj[k];
+      if (typeof v === "string") {
+        const hit = findVideoUrl(v, depth + 1);
+        if (hit) return hit;
+      }
+    }
+    for (const v of Object.values(obj)) {
+      const hit = findVideoUrl(v, depth + 1);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+function findString(node: unknown, keys: string[], depth = 0): string | null {
+  if (depth > 6 || node == null) return null;
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const hit = findString(item, keys, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  }
+  if (typeof node === "object") {
+    const obj = node as Record<string, unknown>;
+    for (const k of keys) {
+      if (typeof obj[k] === "string") return obj[k] as string;
+    }
+    for (const v of Object.values(obj)) {
+      const hit = findString(v, keys, depth + 1);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
 export async function getMovie(movieId: string): Promise<PopcornMovieState> {
-  const result = await callTool<Record<string, unknown>>("get_movie", {
-    id: movieId,
-  });
+  const result = await callTool<unknown>("get_movie", { id: movieId });
+
+  // Diagnostic — Vercel logs show Popcorn's exact response so we can adjust
+  // parsing if their schema changes. Trimmed to keep logs manageable.
+  try {
+    const preview = JSON.stringify(result).slice(0, 800);
+    console.log(`[popcorn] get_movie(${movieId}) →`, preview);
+  } catch {
+    console.log(`[popcorn] get_movie(${movieId}) → [unserializable]`);
+  }
 
   const status =
-    (result.status as string | undefined) ??
-    (result.state as string | undefined) ??
-    "unknown";
-  const videoUrl =
-    (result.video_url as string | undefined) ??
-    (result.videoUrl as string | undefined) ??
-    (result.url as string | undefined) ??
-    null;
+    findString(result, [
+      "status",
+      "state",
+      "movieStatus",
+      "movie_status",
+    ]) ?? "unknown";
+
+  const videoUrl = findVideoUrl(result);
+
+  const top = result as Record<string, unknown> | null;
   const progress =
-    typeof result.progress === "number" ? (result.progress as number) : null;
+    top && typeof top.progress === "number" ? (top.progress as number) : null;
+
   const errorMessage =
-    (result.error_message as string | undefined) ??
-    (result.errorMessage as string | undefined) ??
-    null;
+    findString(result, ["error_message", "errorMessage"]) ?? null;
 
   return {
     id: movieId,

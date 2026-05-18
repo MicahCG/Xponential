@@ -61,6 +61,8 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
 
   // Currently-active run (the one we're polling)
   const [activeRun, setActiveRun] = useState<RunRow | null>(null);
+  const [popcornStatus, setPopcornStatus] = useState<string | null>(null);
+  const [popcornHint, setPopcornHint] = useState<string | null>(null);
   const [recentRuns, setRecentRuns] = useState<RunRow[]>([]);
 
   const fetchTemplate = useCallback(async () => {
@@ -116,6 +118,12 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
         const run = data.run as RunRow | undefined;
         if (!run || cancelled) return;
         setActiveRun(run);
+        if (typeof data.popcornStatus === "string") {
+          setPopcornStatus(data.popcornStatus);
+        }
+        setPopcornHint(
+          typeof data.popcornHint === "string" ? data.popcornHint : null
+        );
         if (run.status === "posted" || run.status === "failed") {
           fetchTemplate();
           return;
@@ -302,6 +310,16 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
                     {new Date(activeRun.createdAt).toLocaleTimeString()}
                   </span>
                 </div>
+                {popcornStatus && activeRun.status === "generating" && (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Popcorn status: <code className="font-mono">{popcornStatus}</code>
+                  </div>
+                )}
+                {popcornHint && (
+                  <div className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                    {popcornHint}
+                  </div>
+                )}
                 {activeRun.errorMessage && (
                   <div className="mt-1 text-xs text-destructive">
                     {activeRun.errorMessage}
