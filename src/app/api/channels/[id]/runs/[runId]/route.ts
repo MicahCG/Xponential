@@ -51,11 +51,11 @@ export async function GET(
     return NextResponse.json({ run: stripJoin(run) });
   }
 
-  // Hard timeout: if a non-terminal run has been alive longer than 30 minutes,
-  // mark it as failed. Popcorn typically returns in 30-90s; anything past 30
-  // minutes is either a stuck job or a missed status flip. Stops infinite
-  // polling and surfaces a clean error in the UI.
-  const RUN_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+  // Hard timeout: if a non-terminal run has been alive longer than the cap,
+  // mark it as failed. Real-world Popcorn renders for this account land
+  // between 17 and 35 minutes (occasionally longer), so 60 minutes gives
+  // plenty of headroom while still killing genuinely stuck jobs.
+  const RUN_TIMEOUT_MS = 60 * 60 * 1000; // 60 minutes
   const elapsedMs = Date.now() - new Date(run.createdAt).getTime();
   if (elapsedMs > RUN_TIMEOUT_MS) {
     run = await prisma.channelRun.update({
