@@ -35,6 +35,8 @@ model User {
   videoPosts          VideoPost[]
   pinterestApiLogs    PinterestApiLog[]
   tiktokApiLogs       TikTokApiLog[]
+  channels            Channel[]
+  channelRuns         ChannelRun[]
 
   @@map("users")
 }
@@ -66,6 +68,7 @@ model Workspace {
   videoPosts          VideoPost[]
   pinterestApiLogs    PinterestApiLog[]
   tiktokApiLogs       TikTokApiLog[]
+  channels            Channel[]
 
   @@unique([userId, slug])
   @@index([userId])
@@ -231,6 +234,7 @@ model PlatformConnection {
   workspace           Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   personalityProfiles PersonalityProfile[]
   watchedAccounts     WatchedAccount[]
+  channels            Channel[]
 
   @@unique([workspaceId, platform, accountId])
   @@index([workspaceId, platform])
@@ -457,4 +461,54 @@ model VideoPost {
   @@index([userId, status])
   @@index([workspaceId, status])
   @@map("video_posts")
+}
+
+/// A Channel is a reusable video-generation config: a name, a prompt template
+/// passed to Popcorn, and a target platform connection (currently TikTok).
+/// "Run channel" creates a ChannelRun that tracks the Popcorn movie + the
+/// resulting platform post.
+model Channel {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  workspaceId    String   @map("workspace_id")
+  connectionId   String   @map("connection_id")
+  name           String
+  promptTemplate String   @map("prompt_template") @db.Text
+  durationSec    Int?     @map("duration_sec")
+  orientation    String?
+  style          String?
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace  Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connection PlatformConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  runs       ChannelRun[]
+
+  @@index([workspaceId, isActive])
+  @@index([userId])
+  @@map("channels")
+}
+
+/// A single run of a Channel. Tracks Popcorn movie generation, then the
+/// resulting TikTok inbox post. UI polls runs to surface progress.
+model ChannelRun {
+  id              String    @id @default(cuid())
+  channelId       String    @map("channel_id")
+  userId          String    @map("user_id")
+  promptUsed      String    @map("prompt_used") @db.Text
+  popcornMovieId  String?   @map("popcorn_movie_id")
+  videoUrl        String?   @map("video_url")
+  platformPostId  String?   @map("platform_post_id")
+  status          String    @default("pending")
+  errorMessage    String?   @map("error_message") @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, createdAt])
+  @@map("channel_runs")
 }
