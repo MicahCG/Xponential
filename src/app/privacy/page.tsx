@@ -6,7 +6,7 @@ export default function PrivacyPolicyPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-16 text-sm leading-relaxed text-gray-700">
       <h1 className="mb-2 text-3xl font-bold text-gray-900">Privacy Policy</h1>
-      <p className="mb-8 text-gray-500">Last updated: May 14, 2026</p>
+      <p className="mb-8 text-gray-500">Last updated: May 18, 2026</p>
 
       <section className="mb-8">
         <h2 className="mb-3 text-lg font-semibold text-gray-900">
@@ -16,9 +16,9 @@ export default function PrivacyPolicyPage() {
           Xponential (&quot;we&quot;, &quot;our&quot;, or &quot;us&quot;)
           operates a brand-aware social publishing platform that lets brand
           owners draft, approve, and publish content to their own connected
-          accounts on platforms including X (Twitter) and Pinterest. This
-          Privacy Policy explains what we collect, why we collect it, and what
-          choices you have about your data when you use our service at{" "}
+          accounts on platforms including X (Twitter), Pinterest, and TikTok.
+          This Privacy Policy explains what we collect, why we collect it, and
+          what choices you have about your data when you use our service at{" "}
           <a
             href="https://xponential-two.vercel.app"
             className="text-blue-600 underline"
@@ -41,18 +41,20 @@ export default function PrivacyPolicyPage() {
           <li>
             <strong>Platform OAuth credentials:</strong> access tokens, refresh
             tokens, granted scopes, and token expiration timestamps issued by
-            connected platforms (X, Pinterest). Used only to perform actions
-            you explicitly initiate on those platforms.
+            connected platforms (X, Pinterest, TikTok). Used only to perform
+            actions you explicitly initiate on those platforms.
           </li>
           <li>
             <strong>Connected account profile data:</strong> the username,
-            account identifier, and (for Pinterest) board names returned by the
+            display name, account identifier (e.g. Pinterest username, TikTok
+            open_id), and (for Pinterest) board names returned by the
             platform&apos;s API when you connect.
           </li>
           <li>
-            <strong>Content data:</strong> the pins, posts, drafts, and pin
-            metadata (title, description, image URL, destination link, alt
-            text, board selection) that you create or approve inside Xponential.
+            <strong>Content data:</strong> the pins, posts, videos, drafts, and
+            associated metadata (title, description, image or video URL,
+            destination link, alt text, board selection) that you create or
+            approve inside Xponential.
           </li>
           <li>
             <strong>Operational logs:</strong> a record of every API call we
@@ -153,7 +155,59 @@ export default function PrivacyPolicyPage() {
 
       <section className="mb-8">
         <h2 className="mb-3 text-lg font-semibold text-gray-900">
-          5. Third-Party Services
+          5. TikTok API and TikTok Data
+        </h2>
+        <p className="mb-3">
+          Xponential uses TikTok&apos;s official Content Posting API (v2) to
+          let brand owners send video drafts to their own TikTok account
+          inboxes. We adhere to TikTok&apos;s Developer Terms of Service, API
+          Terms, and TikTok&apos;s own{" "}
+          <a
+            href="https://www.tiktok.com/legal/page/global/privacy-policy/en"
+            className="text-blue-600 underline"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Privacy Policy
+          </a>
+          .
+        </p>
+        <p className="mb-2 font-medium text-gray-900">
+          OAuth scopes we request:
+        </p>
+        <ul className="mb-3 list-disc space-y-1 pl-5">
+          <li>
+            <code>user.info.basic</code> — to display the connected account&apos;s
+            display name, open_id, and avatar inside the connection dashboard.
+          </li>
+          <li>
+            <code>video.upload</code> — to send a single video to your
+            TikTok&apos;s inbox/drafts so you can review and publish it from
+            the TikTok app. Xponential does not publish directly to your
+            TikTok feed.
+          </li>
+        </ul>
+        <p className="mb-3">
+          When you compose a TikTok draft in Xponential, the video URL you
+          provide is sent to TikTok via{" "}
+          <code>POST /v2/post/publish/inbox/video/init/</code>. TikTok pulls
+          the video and places it in your account&apos;s drafts inbox. The
+          final decision to publish always happens inside the TikTok app — we
+          cannot bypass that step. TikTok content is never shared with other
+          Xponential users or sold or licensed to third parties.
+        </p>
+        <p>
+          You can revoke Xponential&apos;s access to your TikTok account at
+          any time by clicking <strong>Disconnect</strong> on{" "}
+          <code>/connections/tiktok</code>, which clears the OAuth tokens
+          from our database, or by removing the app from your TikTok account
+          settings.
+        </p>
+      </section>
+
+      <section className="mb-8">
+        <h2 className="mb-3 text-lg font-semibold text-gray-900">
+          6. Third-Party Services
         </h2>
         <p className="mb-2">
           We use the following third-party services to operate the platform.
@@ -163,6 +217,10 @@ export default function PrivacyPolicyPage() {
           <li>
             <strong>Pinterest API</strong> — for board listing and pin
             publishing on your behalf via OAuth.
+          </li>
+          <li>
+            <strong>TikTok API</strong> — for sending video drafts to your
+            TikTok inbox on your behalf via OAuth (Content Posting API v2).
           </li>
           <li>
             <strong>X (Twitter) API</strong> — for content actions on your X
@@ -184,8 +242,8 @@ export default function PrivacyPolicyPage() {
           <li>
             <strong>Apify</strong> — used in limited internal/developer
             tooling for backup posting paths; not part of the production
-            Pinterest path, which uses Pinterest&apos;s official API
-            exclusively.
+            Pinterest or TikTok paths, which use the platforms&apos; official
+            APIs exclusively.
           </li>
         </ul>
         <p className="mt-3">
@@ -196,7 +254,7 @@ export default function PrivacyPolicyPage() {
 
       <section className="mb-8">
         <h2 className="mb-3 text-lg font-semibold text-gray-900">
-          6. Data Storage and Security
+          7. Data Storage and Security
         </h2>
         <p>
           Your data is stored in a secure Postgres database hosted by Supabase
@@ -211,7 +269,7 @@ export default function PrivacyPolicyPage() {
 
       <section className="mb-8">
         <h2 className="mb-3 text-lg font-semibold text-gray-900">
-          7. Data Retention and Deletion
+          8. Data Retention and Deletion
         </h2>
         <p className="mb-3">
           We retain your data for as long as your account is active. You may
@@ -224,14 +282,15 @@ export default function PrivacyPolicyPage() {
           at any time by contacting us at the email below. Upon a deletion
           request, your account, brands, platform connections, OAuth tokens,
           content history, and operational logs will be removed within 30
-          days. Pinterest content already published to your Pinterest account
-          remains on Pinterest unless you delete it there.
+          days. Content already published to your Pinterest or X account, and
+          TikTok drafts already sent to your inbox, remain on those platforms
+          unless you delete them there.
         </p>
       </section>
 
       <section className="mb-8">
         <h2 className="mb-3 text-lg font-semibold text-gray-900">
-          8. Your Rights
+          9. Your Rights
         </h2>
         <p className="mb-2">
           Depending on your location, you may have the right to:
@@ -242,7 +301,8 @@ export default function PrivacyPolicyPage() {
           <li>
             Revoke OAuth access at any time via the{" "}
             <strong>Disconnect</strong> button on the relevant connection page
-            in Xponential, or via your Pinterest or X account settings.
+            in Xponential, or via your Pinterest, TikTok, or X account
+            settings.
           </li>
           <li>Opt out of data processing where applicable.</li>
           <li>Lodge a complaint with a supervisory authority.</li>
@@ -251,7 +311,7 @@ export default function PrivacyPolicyPage() {
 
       <section className="mb-8">
         <h2 className="mb-3 text-lg font-semibold text-gray-900">
-          9. Children&apos;s Privacy
+          10. Children&apos;s Privacy
         </h2>
         <p>
           Xponential is not directed to children under 13 (or the equivalent
@@ -263,7 +323,7 @@ export default function PrivacyPolicyPage() {
 
       <section className="mb-8">
         <h2 className="mb-3 text-lg font-semibold text-gray-900">
-          10. Changes to This Policy
+          11. Changes to This Policy
         </h2>
         <p>
           We may update this Privacy Policy from time to time. We will notify
@@ -275,7 +335,7 @@ export default function PrivacyPolicyPage() {
 
       <section className="mb-8">
         <h2 className="mb-3 text-lg font-semibold text-gray-900">
-          11. Contact
+          12. Contact
         </h2>
         <p>
           If you have questions about this Privacy Policy, want to exercise
