@@ -204,7 +204,10 @@ export interface TikTokUserInfo {
 }
 
 export async function getUserInfo(conn: ConnectionWithTokens): Promise<TikTokUserInfo> {
-  const fields = "open_id,union_id,avatar_url,display_name,username";
+  // `username` requires the user.info.profile scope; we only request
+  // user.info.basic, so we ask for the fields that scope covers.
+  // display_name is enough to identify the connected account in the UI.
+  const fields = "open_id,union_id,avatar_url,display_name";
   const res = await apiFetch<{ data: { user: TikTokUserInfo } }>(
     conn,
     "GET",
