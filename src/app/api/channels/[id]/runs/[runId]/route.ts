@@ -51,6 +51,33 @@ export async function GET(
     return NextResponse.json({ run: stripJoin(run) });
   }
 
+  // Hard timeout: if a non-terminal run has been alive longer than 30 minutes,
+  // mark it as failed. Popcorn typically returns in 30-90s; anything past 30
+  // minutes is either a stuck job or a missed status flip. Stops infinite
+  // polling and surfaces a clean error in the UI.
+  const RUN_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+  const elapsedMs = Date.now() - new Date(run.createdAt).getTime();
+  if (elapsedMs > RUN_TIMEOUT_MS) {
+    run = await prisma.channelRun.update({
+      where: { id: run.id },
+      data: {
+        status: "failed",
+        errorMessage: `Run timed out after ${Math.round(
+          elapsedMs / 60000
+        )} minutes. Popcorn never reported a usable video URL.`,
+      },
+      include: {
+        channel: {
+          select: {
+            connectionId: true,
+            connection: { select: { platform: true, accountHandle: true } },
+          },
+        },
+      },
+    });
+    return NextResponse.json({ run: stripJoin(run) });
+  }
+
   // 1. If we're still waiting on Popcorn, poll it.
   if (run.status === "generating" && run.popcornMovieId) {
     try {
