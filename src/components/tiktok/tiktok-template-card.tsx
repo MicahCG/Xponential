@@ -362,17 +362,17 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
               </Button>
               <Button
                 onClick={generate}
-                disabled={running || !!inProgress || !prompt.trim()}
+                disabled={running || !prompt.trim()}
               >
-                {running || inProgress ? (
+                {running ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating…
+                    Starting…
                   </>
                 ) : (
                   <>
                     <Sparkles className="mr-2 h-4 w-4" />
-                    Generate video
+                    {inProgress ? "Generate another" : "Generate video"}
                   </>
                 )}
               </Button>
