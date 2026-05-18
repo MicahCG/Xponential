@@ -229,7 +229,7 @@ export async function getUserInfo(conn: ConnectionWithTokens): Promise<TikTokUse
 }
 
 export interface InitDraftUploadInput {
-  /** Public https URL of the video file to pull. Domain must be verified in TikTok dev portal. */
+  /** Public https URL of the video file. We fetch the bytes and upload them to TikTok via FILE_UPLOAD. */
   videoUrl: string;
 }
 
@@ -238,25 +238,79 @@ export interface InitDraftUploadResult {
 }
 
 /**
- * Sends a video draft to the user's TikTok inbox via PULL_FROM_URL.
- * The user reviews and publishes from the TikTok app — we never publish directly.
+ * Sends a video draft to the user's TikTok inbox using the FILE_UPLOAD source.
+ *
+ * Why not PULL_FROM_URL? TikTok requires the source domain to be verified in
+ * the developer portal, and Popcorn videos live on their CDN — a domain we
+ * can't verify. FILE_UPLOAD has no such restriction: we fetch the bytes
+ * ourselves and PUT them straight to TikTok's upload URL.
+ *
+ * Popcorn shorts are well under TikTok's 64MB single-chunk threshold, so we
+ * always upload as a single chunk (chunk_size = video_size, total_chunk_count = 1).
  */
 export async function initDraftUpload(
   conn: ConnectionWithTokens,
   input: InitDraftUploadInput
 ): Promise<InitDraftUploadResult> {
-  const res = await apiFetch<{ data: { publish_id: string } }>(
-    conn,
-    "POST",
-    "/post/publish/inbox/video/init/",
-    {
-      source_info: {
-        source: "PULL_FROM_URL",
-        video_url: input.videoUrl,
-      },
-    }
-  );
-  return { publishId: res.data.publish_id };
+  // 1. Fetch the video bytes from Popcorn (or wherever).
+  const videoRes = await fetch(input.videoUrl);
+  if (!videoRes.ok) {
+    throw new TikTokApiError({
+      message: `Failed to fetch source video (HTTP ${videoRes.status}) from ${input.videoUrl}`,
+      httpCode: 0,
+    });
+  }
+  const videoBytes = new Uint8Array(await videoRes.arrayBuffer());
+  const videoSize = videoBytes.byteLength;
+  if (videoSize === 0) {
+    throw new TikTokApiError({
+      message: "Source video is empty (0 bytes).",
+      httpCode: 0,
+    });
+  }
+  // TikTok caps single-chunk upload at 64MB. Popcorn shorts should always
+  // be well under this, but bail early with a clear message if we ever hit
+  // it instead of silently sending an invalid request.
+  const SINGLE_CHUNK_MAX = 64 * 1024 * 1024;
+  if (videoSize > SINGLE_CHUNK_MAX) {
+    throw new TikTokApiError({
+      message: `Video is ${(videoSize / 1024 / 1024).toFixed(1)}MB; single-chunk upload only supports up to 64MB.`,
+      httpCode: 0,
+    });
+  }
+
+  // 2. Init the upload — TikTok hands us back an upload_url.
+  const init = await apiFetch<{
+    data: { publish_id: string; upload_url: string };
+  }>(conn, "POST", "/post/publish/inbox/video/init/", {
+    source_info: {
+      source: "FILE_UPLOAD",
+      video_size: videoSize,
+      chunk_size: videoSize,
+      total_chunk_count: 1,
+    },
+  });
+
+  // 3. PUT the bytes to TikTok. This endpoint is outside open.tiktokapis.com
+  // so we don't use apiFetch — no bearer token, no JSON envelope.
+  const uploadRes = await fetch(init.data.upload_url, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "video/mp4",
+      "Content-Length": String(videoSize),
+      "Content-Range": `bytes 0-${videoSize - 1}/${videoSize}`,
+    },
+    body: videoBytes,
+  });
+  if (!uploadRes.ok) {
+    const text = await uploadRes.text().catch(() => "");
+    throw new TikTokApiError({
+      message: `TikTok upload PUT failed (HTTP ${uploadRes.status})${text ? ` — ${text.slice(0, 300)}` : ""}`,
+      httpCode: uploadRes.status,
+    });
+  }
+
+  return { publishId: init.data.publish_id };
 }
 
 export interface PublishStatus {
