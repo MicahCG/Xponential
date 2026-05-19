@@ -177,8 +177,15 @@ function pickJsonRpcResponseFromSse<T>(
     }
   }
 
-  // Last resort: return the final message.
-  return messages[messages.length - 1];
+  // If we only ever saw notifications, throw cleanly instead of returning
+  // something callTool can't make sense of (which would manifest as a
+  // generic TypeError that the cron silently swallows).
+  throw new PopcornError({
+    message:
+      "Popcorn MCP returned an SSE stream with only notifications and no JSON-RPC response.",
+    code: "no_rpc_response",
+    raw: text,
+  });
 }
 
 /**
