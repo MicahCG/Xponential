@@ -22,7 +22,11 @@ export async function GET(request: NextRequest) {
   }
 
   const runs = await prisma.channelRun.findMany({
-    where: { status: { in: ["pending", "generating", "ready", "posting"] } },
+    where: {
+      status: {
+        in: ["pending", "generating", "ready", "posting", "uploaded"],
+      },
+    },
     select: { id: true },
     orderBy: { createdAt: "asc" },
     take: 50, // upper bound per tick — runs that miss this cycle pick up next tick

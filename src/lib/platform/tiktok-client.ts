@@ -235,6 +235,17 @@ export interface InitDraftUploadInput {
 
 export interface InitDraftUploadResult {
   publishId: string;
+  /**
+   * Verdict from TikTok at the moment we returned. "delivered" means TikTok
+   * said the draft is in the inbox; "processing" means TikTok was still
+   * working on it when we ran out of patience; "failed" means TikTok
+   * explicitly rejected it.
+   */
+  verdict: "delivered" | "processing" | "failed";
+  /** Last TikTok publish status we saw (e.g. SEND_TO_USER_INBOX, PROCESSING_UPLOAD). */
+  lastStatus: string;
+  /** Populated when verdict === "failed". */
+  failReason?: string;
 }
 
 /**
@@ -311,59 +322,46 @@ export async function initDraftUpload(
   }
 
   // 4. PUT-returned-200 only means the bytes arrived. TikTok processes the
-  // video asynchronously and can still reject it (bad codec, watermark
-  // detection, duration violation, etc.). Poll status/fetch until we see a
-  // verdict so we never lie to the user about a "Draft sent" that doesn't
-  // actually appear in their TikTok inbox.
+  // video asynchronously — it can still reject it (bad codec, watermark,
+  // duration, etc.) or just take its sweet time. Poll status/fetch for up to
+  // 60s, then return whatever verdict we have so the caller can decide
+  // whether to mark the run "posted" or keep it in an intermediate state
+  // (and let the cron continue polling).
   const publishId = init.data.publish_id;
-  const verdict = await waitForPublishVerdict(conn, publishId);
-  if (verdict.failed) {
-    throw new TikTokApiError({
-      message: `TikTok rejected the upload — ${verdict.status}${verdict.failReason ? `: ${verdict.failReason}` : ""}`,
-      httpCode: 0,
-      responseBody: verdict.raw,
-    });
-  }
-
-  return { publishId };
+  return await checkPublishVerdict(conn, publishId, 60_000);
 }
 
 /**
- * Poll /post/publish/status/fetch/ until TikTok hits a state we can interpret.
- *
- * Inbox flow terminal states:
- *   SEND_TO_USER_INBOX  → success, user must approve in the TikTok app
- *   PUBLISH_COMPLETE    → success (uncommon for inbox endpoint but possible)
- *   FAILED              → terminal failure with fail_reason
- *
- * Non-terminal: PROCESSING_DOWNLOAD, PROCESSING_UPLOAD. If we're still in one
- * of these past the timeout, accept it optimistically — TikTok's processing
- * occasionally takes minutes, and the run can still complete successfully
- * after we return. We only throw when we have a definitive FAILED verdict.
+ * Returns the current verdict for a TikTok publish_id without doing the
+ * upload itself. Used by the cron to advance runs that came back from
+ * initDraftUpload with verdict="processing".
  */
-async function waitForPublishVerdict(
+export async function checkPublishVerdict(
   conn: ConnectionWithTokens,
-  publishId: string
-): Promise<{
-  failed: boolean;
-  status: string;
-  failReason?: string;
-  raw?: unknown;
-}> {
-  const TIMEOUT_MS = 60_000;
+  publishId: string,
+  timeoutMs = 0
+): Promise<InitDraftUploadResult> {
   const POLL_INTERVAL_MS = 3_000;
   const started = Date.now();
   let last: PublishStatus | null = null;
 
-  while (Date.now() - started < TIMEOUT_MS) {
+  // If timeoutMs is 0 we do exactly one check (cron-friendly).
+  do {
     try {
       last = await fetchPublishStatus(conn, publishId);
     } catch (err) {
-      // Transient status-fetch errors shouldn't kill the run — keep trying.
+      // Transient status-fetch errors shouldn't kill the run.
       console.warn(
         "[tiktok-client] status/fetch transient error:",
         err instanceof Error ? err.message : err
       );
+      if (timeoutMs === 0) {
+        return {
+          publishId,
+          verdict: "processing",
+          lastStatus: "STATUS_FETCH_ERROR",
+        };
+      }
       await sleep(POLL_INTERVAL_MS);
       continue;
     }
@@ -371,10 +369,10 @@ async function waitForPublishVerdict(
     const s = last.status.toUpperCase();
     if (s === "FAILED") {
       return {
-        failed: true,
-        status: s,
+        publishId,
+        verdict: "failed",
+        lastStatus: s,
         failReason: last.failReason,
-        raw: last,
       };
     }
     if (
@@ -382,17 +380,16 @@ async function waitForPublishVerdict(
       s === "PUBLISH_COMPLETE" ||
       s === "PUBLISH_COMPLETE_OK"
     ) {
-      return { failed: false, status: s, raw: last };
+      return { publishId, verdict: "delivered", lastStatus: s };
     }
+    if (timeoutMs === 0) break;
     await sleep(POLL_INTERVAL_MS);
-  }
+  } while (Date.now() - started < timeoutMs);
 
-  // Timed out without a verdict. Treat as success (it can still resolve
-  // server-side) but include the last status seen in the run record for debug.
   return {
-    failed: false,
-    status: last?.status ?? "UNKNOWN_TIMEOUT",
-    raw: last,
+    publishId,
+    verdict: "processing",
+    lastStatus: last?.status ?? "UNKNOWN",
   };
 }
 

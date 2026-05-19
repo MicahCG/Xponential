@@ -3,6 +3,7 @@ import { getMovie, normalizeStatus, PopcornError } from "@/lib/popcorn/client";
 import {
   loadConnectionById,
   initDraftUpload,
+  checkPublishVerdict,
   TikTokApiError,
 } from "@/lib/platform/tiktok-client";
 
@@ -29,6 +30,7 @@ export interface AdvanceResult {
   popcornStatus?: string;
   popcornHint?: string;
   popcornError?: string;
+  tiktokStatus?: string;
 }
 
 const runInclude = {
@@ -120,7 +122,10 @@ export async function advanceChannelRun(runId: string): Promise<AdvanceResult | 
     }
   }
 
-  // 2. We have a video URL — upload it to TikTok as a draft.
+  // 2. We have a video URL — upload it to TikTok as a draft. After upload,
+  // we only mark "posted" when TikTok explicitly confirms SEND_TO_USER_INBOX.
+  // If TikTok is still processing, we park in "uploaded" and let the cron
+  // continue polling status/fetch until we get a real verdict.
   if (run.status === "ready" && run.videoUrl) {
     const conn = await loadConnectionById(
       run.channel.connectionId,
@@ -141,27 +146,8 @@ export async function advanceChannelRun(runId: string): Promise<AdvanceResult | 
 
     try {
       const result = await initDraftUpload(conn, { videoUrl: run.videoUrl });
-
-      await prisma.postHistory.create({
-        data: {
-          userId: run.userId,
-          workspaceId: run.channel.workspaceId,
-          platform: "tiktok",
-          postType: "original",
-          content: run.promptUsed,
-          videoUrl: run.videoUrl,
-          videoFormat: "mp4",
-          platformPostId: result.publishId,
-          postingMethod: "tiktok_api",
-        },
-      });
-
-      run = await prisma.channelRun.update({
-        where: { id: run.id },
-        data: { status: "posted", platformPostId: result.publishId },
-        include: runInclude,
-      });
-      return { run: strip(run) };
+      run = await applyTikTokVerdict(run.id, run.channel.workspaceId, run.userId, run.promptUsed, run.videoUrl, result);
+      return { run: strip(run), tiktokStatus: result.lastStatus };
     } catch (err) {
       const message =
         err instanceof TikTokApiError
@@ -178,7 +164,127 @@ export async function advanceChannelRun(runId: string): Promise<AdvanceResult | 
     }
   }
 
+  // 3. Uploaded to TikTok, awaiting their async verdict — re-check status.
+  if (run.status === "uploaded" && run.platformPostId) {
+    const conn = await loadConnectionById(
+      run.channel.connectionId,
+      run.userId
+    );
+    if (!conn) {
+      run = await prisma.channelRun.update({
+        where: { id: run.id },
+        data: {
+          status: "failed",
+          errorMessage:
+            "TikTok connection no longer active before we could confirm the upload.",
+        },
+        include: runInclude,
+      });
+      return { run: strip(run) };
+    }
+
+    try {
+      // Single-shot check on this tick — the cron will revisit next cycle if
+      // TikTok is still processing.
+      const result = await checkPublishVerdict(conn, run.platformPostId, 0);
+      run = await applyTikTokVerdict(
+        run.id,
+        run.channel.workspaceId,
+        run.userId,
+        run.promptUsed,
+        run.videoUrl ?? "",
+        result
+      );
+      return { run: strip(run), tiktokStatus: result.lastStatus };
+    } catch (err) {
+      // Status-fetch errors are transient — stay in "uploaded" and let the
+      // next cron tick try again.
+      const message = err instanceof Error ? err.message : "status check failed";
+      console.warn("[advance-run] tiktok status check error:", message);
+      return { run: strip(run), tiktokStatus: "STATUS_FETCH_ERROR" };
+    }
+  }
+
   return { run: strip(run) };
+}
+
+interface TikTokVerdict {
+  publishId: string;
+  verdict: "delivered" | "processing" | "failed";
+  lastStatus: string;
+  failReason?: string;
+}
+
+/**
+ * Maps a TikTok verdict onto the ChannelRun state machine. Centralized so the
+ * "first upload" and "cron re-check" paths agree on the same transitions.
+ */
+async function applyTikTokVerdict(
+  runId: string,
+  workspaceId: string,
+  userId: string,
+  promptUsed: string,
+  videoUrl: string,
+  result: TikTokVerdict
+) {
+  if (result.verdict === "failed") {
+    return prisma.channelRun.update({
+      where: { id: runId },
+      data: {
+        status: "failed",
+        platformPostId: result.publishId,
+        errorMessage: `TikTok rejected the upload — ${result.lastStatus}${
+          result.failReason ? `: ${result.failReason}` : ""
+        }`,
+      },
+      include: runInclude,
+    });
+  }
+
+  if (result.verdict === "delivered") {
+    // Idempotent: only write PostHistory the first time this run flips to
+    // posted (on retry/re-check it would already exist).
+    const existing = await prisma.postHistory.findFirst({
+      where: { platformPostId: result.publishId, platform: "tiktok" },
+      select: { id: true },
+    });
+    if (!existing) {
+      await prisma.postHistory.create({
+        data: {
+          userId,
+          workspaceId,
+          platform: "tiktok",
+          postType: "original",
+          content: promptUsed,
+          videoUrl,
+          videoFormat: "mp4",
+          platformPostId: result.publishId,
+          postingMethod: "tiktok_api",
+        },
+      });
+    }
+    return prisma.channelRun.update({
+      where: { id: runId },
+      data: {
+        status: "posted",
+        platformPostId: result.publishId,
+        errorMessage: null,
+      },
+      include: runInclude,
+    });
+  }
+
+  // Still processing on TikTok's side — park in "uploaded" with the publish_id
+  // so the cron can keep checking and the UI can show the live TikTok status.
+  return prisma.channelRun.update({
+    where: { id: runId },
+    data: {
+      status: "uploaded",
+      platformPostId: result.publishId,
+      errorMessage: `Awaiting TikTok confirmation (last status: ${result.lastStatus})`,
+    },
+    include: runInclude,
+  });
 }
 
 function strip(run: {

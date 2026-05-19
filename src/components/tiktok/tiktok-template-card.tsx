@@ -64,6 +64,7 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
   const [activeRun, setActiveRun] = useState<RunRow | null>(null);
   const [popcornStatus, setPopcornStatus] = useState<string | null>(null);
   const [popcornHint, setPopcornHint] = useState<string | null>(null);
+  const [tiktokStatus, setTiktokStatus] = useState<string | null>(null);
   const [recentRuns, setRecentRuns] = useState<RunRow[]>([]);
 
   const fetchTemplate = useCallback(async () => {
@@ -87,7 +88,10 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
       setRecentRuns(data.recentRuns ?? []);
       const inflight = (data.recentRuns ?? []).find(
         (r: RunRow) =>
-          r.status === "generating" || r.status === "ready" || r.status === "posting"
+          r.status === "generating" ||
+          r.status === "ready" ||
+          r.status === "posting" ||
+          r.status === "uploaded"
       );
       if (inflight) setActiveRun(inflight);
     } finally {
@@ -125,6 +129,9 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
         setPopcornHint(
           typeof data.popcornHint === "string" ? data.popcornHint : null
         );
+        if (typeof data.tiktokStatus === "string") {
+          setTiktokStatus(data.tiktokStatus);
+        }
         if (run.status === "posted" || run.status === "failed") {
           fetchTemplate();
           return;
@@ -212,7 +219,8 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
     activeRun &&
     (activeRun.status === "generating" ||
       activeRun.status === "ready" ||
-      activeRun.status === "posting");
+      activeRun.status === "posting" ||
+      activeRun.status === "uploaded");
 
   return (
     <Card>
@@ -321,6 +329,11 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
                     {popcornHint}
                   </div>
                 )}
+                {tiktokStatus && activeRun.status === "uploaded" && (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    TikTok status: <code className="font-mono">{tiktokStatus}</code>
+                  </div>
+                )}
                 {activeRun.errorMessage && (
                   <div className="mt-1 text-xs text-destructive">
                     {activeRun.errorMessage}
@@ -422,16 +435,22 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
 function RunStatusIcon({ status }: { status: string }) {
   if (status === "posted") return <CheckCircle2 className="h-4 w-4 text-green-600" />;
   if (status === "failed") return <XCircle className="h-4 w-4 text-destructive" />;
-  if (status === "generating" || status === "ready" || status === "posting")
+  if (
+    status === "generating" ||
+    status === "ready" ||
+    status === "posting" ||
+    status === "uploaded"
+  )
     return <Loader2 className="h-4 w-4 animate-spin text-amber-600" />;
   return <Clock className="h-4 w-4 text-muted-foreground" />;
 }
 
 function prettyStatus(s: string) {
   if (s === "generating") return "Popcorn is generating the video…";
-  if (s === "ready") return "Posting draft to TikTok…";
-  if (s === "posting") return "Posting draft to TikTok…";
-  if (s === "posted") return "Draft sent to TikTok inbox";
+  if (s === "ready") return "Uploading to TikTok…";
+  if (s === "posting") return "Uploading to TikTok…";
+  if (s === "uploaded") return "Awaiting TikTok confirmation…";
+  if (s === "posted") return "Draft delivered to TikTok inbox";
   if (s === "failed") return "Failed";
   if (s === "pending") return "Queued";
   return s;
