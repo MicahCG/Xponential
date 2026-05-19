@@ -2,15 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getMovie, normalizeStatus, PopcornError } from "@/lib/popcorn/client";
+import {
+  loadConnectionById,
+  checkPublishVerdict,
+  TikTokApiError,
+} from "@/lib/platform/tiktok-client";
 
 /**
- * Rescue a ChannelRun that got marked "failed" while its Popcorn movie
- * actually completed. Checks Popcorn for the real movie state and, if it has
- * a usable video URL, resets the run to "ready" so the next cron tick (or the
- * UI poll) uploads it to TikTok.
+ * Rescue a ChannelRun that the timeout branch marked "failed" while the
+ * downstream systems had actually progressed. Two recovery paths, chosen
+ * based on how far the run got:
  *
- * Safe to call repeatedly — if Popcorn still doesn't have a URL, the run
- * stays failed and the response explains why.
+ * 1. If the run already has a platformPostId → check TikTok status first.
+ *    The bytes are already on TikTok; if TikTok has since flipped to
+ *    SEND_TO_USER_INBOX, mark the run posted. If still processing, leave it
+ *    in "uploaded" so the cron picks back up.
+ *
+ * 2. Else if the run has a popcornMovieId → check Popcorn. If completed
+ *    with a video URL, flip to "ready" and let the cron handle the TikTok
+ *    upload.
+ *
+ * Safe to call repeatedly. Idempotent: never re-uploads if TikTok already
+ * has the bytes.
  */
 export async function POST(
   _req: NextRequest,
@@ -24,18 +37,117 @@ export async function POST(
 
   const run = await prisma.channelRun.findFirst({
     where: { id: runId, channelId, userId: session.user.id },
-    select: { id: true, status: true, popcornMovieId: true },
+    select: {
+      id: true,
+      status: true,
+      popcornMovieId: true,
+      platformPostId: true,
+      videoUrl: true,
+      userId: true,
+      channelId: true,
+      promptUsed: true,
+      channel: {
+        select: { connectionId: true, workspaceId: true },
+      },
+    },
   });
   if (!run) {
     return NextResponse.json({ error: "Run not found" }, { status: 404 });
   }
+
+  // Path 1: bytes are already on TikTok — see if TikTok finally finished.
+  if (run.platformPostId) {
+    const conn = await loadConnectionById(
+      run.channel.connectionId,
+      run.userId
+    );
+    if (!conn) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "TikTok connection no longer active — reconnect it first.",
+        },
+        { status: 409 }
+      );
+    }
+    try {
+      const verdict = await checkPublishVerdict(conn, run.platformPostId, 0);
+      if (verdict.verdict === "delivered") {
+        // Mirror applyTikTokVerdict's pattern: findFirst → create only if
+        // missing. PostHistory doesn't have a unique constraint on
+        // platformPostId so we can't use upsert.
+        const existing = await prisma.postHistory.findFirst({
+          where: { platformPostId: verdict.publishId, platform: "tiktok" },
+          select: { id: true },
+        });
+        if (!existing) {
+          await prisma.postHistory.create({
+            data: {
+              userId: run.userId,
+              workspaceId: run.channel.workspaceId,
+              platform: "tiktok",
+              postType: "original",
+              content: run.promptUsed,
+              videoUrl: run.videoUrl ?? "",
+              videoFormat: "mp4",
+              platformPostId: verdict.publishId,
+              postingMethod: "tiktok_api",
+            },
+          });
+        }
+        const updated = await prisma.channelRun.update({
+          where: { id: run.id },
+          data: { status: "posted", errorMessage: null },
+          select: { id: true, status: true, platformPostId: true },
+        });
+        return NextResponse.json({ ok: true, via: "tiktok", run: updated });
+      }
+      if (verdict.verdict === "failed") {
+        const updated = await prisma.channelRun.update({
+          where: { id: run.id },
+          data: {
+            status: "failed",
+            errorMessage: `TikTok rejected the upload — ${verdict.lastStatus}${
+              verdict.failReason ? `: ${verdict.failReason}` : ""
+            }`,
+          },
+          select: { id: true, status: true, errorMessage: true },
+        });
+        return NextResponse.json({ ok: false, via: "tiktok", run: updated });
+      }
+      // Still processing on TikTok. Park back in "uploaded" so cron resumes.
+      const updated = await prisma.channelRun.update({
+        where: { id: run.id },
+        data: {
+          status: "uploaded",
+          errorMessage: `Re-queued. TikTok last status: ${verdict.lastStatus}`,
+        },
+        select: { id: true, status: true, errorMessage: true },
+      });
+      return NextResponse.json({
+        ok: true,
+        via: "tiktok",
+        message: `TikTok still processing (${verdict.lastStatus}). Run is back in the queue.`,
+        run: updated,
+      });
+    } catch (err) {
+      const message =
+        err instanceof TikTokApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "TikTok status check failed";
+      return NextResponse.json({ ok: false, error: message }, { status: 502 });
+    }
+  }
+
+  // Path 2: never made it to TikTok — check if Popcorn has a usable URL now.
   if (!run.popcornMovieId) {
     return NextResponse.json(
-      { error: "Run has no Popcorn movie id to rescue from." },
+      { error: "Run has neither a TikTok publish id nor a Popcorn movie id." },
       { status: 400 }
     );
   }
-
   try {
     const movie = await getMovie(run.popcornMovieId);
     const norm = normalizeStatus(movie.status);
@@ -63,7 +175,7 @@ export async function POST(
       },
       select: { id: true, status: true, videoUrl: true },
     });
-    return NextResponse.json({ ok: true, run: updated });
+    return NextResponse.json({ ok: true, via: "popcorn", run: updated });
   } catch (err) {
     const message =
       err instanceof PopcornError

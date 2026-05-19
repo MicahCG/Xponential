@@ -8,11 +8,31 @@ import {
 } from "@/lib/platform/tiktok-client";
 
 /**
- * Real-world Popcorn renders for this workspace finish in 17-35 minutes
- * (occasionally longer). 60 minutes gives headroom while still killing
- * genuinely stuck jobs.
+ * Per-stage deadlines, measured from run.createdAt.
+ *
+ * - GENERATING: Popcorn renders normally finish in 17-50 minutes for this
+ *   workspace. 90 min is generous headroom; past that, the movie is almost
+ *   certainly stuck on Popcorn's side (we've seen "running, concept" hang
+ *   for 6+ hours with no progress).
+ *
+ * - UPLOADED: TikTok's PROCESSING_UPLOAD can sit on the same `uploaded_bytes`
+ *   for 15-30+ minutes after a successful PUT. We've observed multi-hour
+ *   stalls in prod. 4h gives TikTok enough room to finally flip without us
+ *   prematurely failing runs whose bytes are already safely on TikTok.
+ *
+ * - READY: shouldn't linger here — it just means we have a video URL but
+ *   haven't kicked off the TikTok init yet. 90 min matches GENERATING since
+ *   any time spent here came out of the same budget.
  */
-const RUN_TIMEOUT_MS = 60 * 60 * 1000;
+const GENERATING_DEADLINE_MS = 90 * 60 * 1000;
+const READY_DEADLINE_MS = 90 * 60 * 1000;
+const UPLOADED_DEADLINE_MS = 4 * 60 * 60 * 1000;
+
+function deadlineForStatus(status: string): number {
+  if (status === "uploaded") return UPLOADED_DEADLINE_MS;
+  if (status === "ready") return READY_DEADLINE_MS;
+  return GENERATING_DEADLINE_MS;
+}
 
 export interface AdvanceResult {
   run: {
@@ -69,14 +89,16 @@ export async function advanceChannelRun(runId: string): Promise<AdvanceResult | 
   // behaviour was outright wrong: it always blamed Popcorn ("Popcorn never
   // reported a usable video URL"), even when Popcorn had finished, the bytes
   // were on TikTok, and we already had a platformPostId. The real bottleneck
-  // was TikTok sitting on PROCESSING_UPLOAD for 20+ minutes.
+  // was TikTok sitting on PROCESSING_UPLOAD for 20+ minutes — sometimes hours.
   //
-  // The new behaviour is state-aware: at timeout, do one last appropriate
-  // attempt for whatever stage we're stuck in, and only fail with a message
-  // that reflects the actual blocker. Recovery short-circuits the failure if
-  // the downstream system has in fact made progress.
+  // The new behaviour is state-aware in two ways:
+  //   1. The deadline itself varies by current status (uploaded runs get up
+  //      to 4h because TikTok's CDN can take that long; generating gets 90m).
+  //   2. At timeout, one last appropriate attempt for whatever stage we're
+  //      stuck in, and only fail with a message reflecting the actual blocker.
   const elapsedMs = Date.now() - new Date(run.createdAt).getTime();
-  if (elapsedMs > RUN_TIMEOUT_MS) {
+  const deadline = deadlineForStatus(run.status);
+  if (elapsedMs > deadline) {
     const minutes = Math.round(elapsedMs / 60000);
 
     // (a) Stuck in "generating" — Popcorn poll never landed a usable URL.
@@ -328,13 +350,17 @@ export async function advanceChannelRun(runId: string): Promise<AdvanceResult | 
     }
   }
 
-  // (d) Final timeout guard — if we've blown the wall-clock budget and the
-  // attempts above didn't push us to a terminal state, fail with a message
-  // that names the actual stage we couldn't get past. Without this guard,
-  // runs would silently stay non-terminal forever once the dedicated
-  // timeout branch fell through.
-  if (elapsedMs > RUN_TIMEOUT_MS && run.status !== "posted" && run.status !== "failed") {
-    const minutes = Math.round(elapsedMs / 60000);
+  // (d) Final timeout guard — if we've blown the per-stage budget for the
+  // status the run *currently* sits in, and the attempts above didn't push
+  // us to a terminal state, fail with a message that names the stage we
+  // couldn't get past. Re-evaluating the deadline against `run.status` (not
+  // the value at function entry) matters: a run that started as "generating"
+  // and flipped to "uploaded" during this tick should get the longer TikTok
+  // deadline, not the Popcorn one.
+  const finalDeadline = deadlineForStatus(run.status);
+  const finalElapsed = Date.now() - new Date(run.createdAt).getTime();
+  if (finalElapsed > finalDeadline && run.status !== "posted" && run.status !== "failed") {
+    const minutes = Math.round(finalElapsed / 60000);
     const stageMsg =
       run.status === "ready"
         ? `couldn't start the TikTok upload (run is "ready" with a video URL but the upload step never ran to terminal).`
