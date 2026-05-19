@@ -65,20 +65,135 @@ export async function advanceChannelRun(runId: string): Promise<AdvanceResult | 
     return { run: strip(run) };
   }
 
-  // Hard timeout — kill stuck runs so they don't poll forever.
+  // Hard timeout. Forensics on the first wave of failures showed the old
+  // behaviour was outright wrong: it always blamed Popcorn ("Popcorn never
+  // reported a usable video URL"), even when Popcorn had finished, the bytes
+  // were on TikTok, and we already had a platformPostId. The real bottleneck
+  // was TikTok sitting on PROCESSING_UPLOAD for 20+ minutes.
+  //
+  // The new behaviour is state-aware: at timeout, do one last appropriate
+  // attempt for whatever stage we're stuck in, and only fail with a message
+  // that reflects the actual blocker. Recovery short-circuits the failure if
+  // the downstream system has in fact made progress.
   const elapsedMs = Date.now() - new Date(run.createdAt).getTime();
   if (elapsedMs > RUN_TIMEOUT_MS) {
-    run = await prisma.channelRun.update({
-      where: { id: run.id },
-      data: {
-        status: "failed",
-        errorMessage: `Run timed out after ${Math.round(
-          elapsedMs / 60000
-        )} minutes. Popcorn never reported a usable video URL.`,
-      },
-      include: runInclude,
-    });
-    return { run: strip(run) };
+    const minutes = Math.round(elapsedMs / 60000);
+
+    // (a) Stuck in "generating" — Popcorn poll never landed a usable URL.
+    if (run.status === "generating") {
+      if (!run.popcornMovieId) {
+        run = await prisma.channelRun.update({
+          where: { id: run.id },
+          data: {
+            status: "failed",
+            errorMessage: `Run timed out after ${minutes} minutes without a Popcorn movie id.`,
+          },
+          include: runInclude,
+        });
+        return { run: strip(run) };
+      }
+      try {
+        const movie = await getMovie(run.popcornMovieId);
+        const norm = normalizeStatus(movie.status);
+        if (norm === "ready" && movie.videoUrl) {
+          run = await prisma.channelRun.update({
+            where: { id: run.id },
+            data: { status: "ready", videoUrl: movie.videoUrl, errorMessage: null },
+            include: runInclude,
+          });
+          // fall through to step 2 — try the TikTok upload right away.
+        } else {
+          const reason =
+            norm === "failed"
+              ? movie.errorMessage ?? `Popcorn reports ${movie.status}`
+              : `Popcorn last status: ${movie.status}${
+                  movie.errorMessage ? ` — ${movie.errorMessage}` : ""
+                }`;
+          run = await prisma.channelRun.update({
+            where: { id: run.id },
+            data: {
+              status: "failed",
+              errorMessage: `Run timed out after ${minutes} minutes waiting on Popcorn. ${reason}`,
+            },
+            include: runInclude,
+          });
+          return { run: strip(run) };
+        }
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : "unknown";
+        run = await prisma.channelRun.update({
+          where: { id: run.id },
+          data: {
+            status: "failed",
+            errorMessage: `Run timed out after ${minutes} minutes waiting on Popcorn. Final Popcorn check also failed: ${detail}`,
+          },
+          include: runInclude,
+        });
+        return { run: strip(run) };
+      }
+    }
+
+    // (b) Stuck in "uploaded" — bytes are on TikTok, TikTok's CDN never
+    // confirmed publish. This is the common case observed in production:
+    // status/fetch returns PROCESSING_UPLOAD for 15-30+ minutes. Do one final
+    // verdict check; mark failed only if TikTok still hasn't moved.
+    if (run.status === "uploaded" && run.platformPostId) {
+      const conn = await loadConnectionById(
+        run.channel.connectionId,
+        run.userId
+      );
+      if (!conn) {
+        run = await prisma.channelRun.update({
+          where: { id: run.id },
+          data: {
+            status: "failed",
+            errorMessage: `Run timed out after ${minutes} minutes — TikTok connection went inactive before TikTok confirmed the upload.`,
+          },
+          include: runInclude,
+        });
+        return { run: strip(run) };
+      }
+      try {
+        const result = await checkPublishVerdict(conn, run.platformPostId, 0);
+        run = await applyTikTokVerdict(
+          run.id,
+          run.channel.workspaceId,
+          run.userId,
+          run.promptUsed,
+          run.videoUrl ?? "",
+          result
+        );
+        if (run.status !== "posted" && run.status !== "failed") {
+          // Still processing on TikTok's side after the wall-clock budget.
+          // applyTikTokVerdict put us back in "uploaded" with the latest
+          // status; overwrite that with a final failure that tells the truth.
+          run = await prisma.channelRun.update({
+            where: { id: run.id },
+            data: {
+              status: "failed",
+              errorMessage: `Run timed out after ${minutes} minutes. TikTok accepted the upload but never confirmed publish (last status: ${result.lastStatus}). The bytes are on TikTok; check the TikTok app inbox in case it eventually arrived.`,
+            },
+            include: runInclude,
+          });
+        }
+        return { run: strip(run) };
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : "unknown";
+        run = await prisma.channelRun.update({
+          where: { id: run.id },
+          data: {
+            status: "failed",
+            errorMessage: `Run timed out after ${minutes} minutes. Final TikTok status check also failed: ${detail}`,
+          },
+          include: runInclude,
+        });
+        return { run: strip(run) };
+      }
+    }
+
+    // (c) Stuck in "ready" or some other non-terminal state — fall through
+    // so the regular advance steps below get one more shot. If they don't
+    // reach terminal, we'll hit step (d) at the bottom of this function.
   }
 
   // 1. Waiting on Popcorn — poll it.
@@ -100,7 +215,7 @@ export async function advanceChannelRun(runId: string): Promise<AdvanceResult | 
       if (norm === "ready" && movie.videoUrl) {
         run = await prisma.channelRun.update({
           where: { id: run.id },
-          data: { status: "ready", videoUrl: movie.videoUrl },
+          data: { status: "ready", videoUrl: movie.videoUrl, errorMessage: null },
           include: runInclude,
         });
         // fall through to step 2 — try the TikTok upload right away.
@@ -116,6 +231,14 @@ export async function advanceChannelRun(runId: string): Promise<AdvanceResult | 
       }
     } catch (err) {
       if (err instanceof PopcornError) {
+        // Persist the transport-level error onto the run so the next tick (and
+        // the eventual timeout branch) can see we've been failing to *reach*
+        // Popcorn, not that Popcorn says we're stuck. Status stays "generating"
+        // so the cron keeps retrying — only the message changes.
+        await prisma.channelRun.update({
+          where: { id: run.id },
+          data: { errorMessage: `Popcorn check failed: ${err.message} (will retry)` },
+        });
         return { run: strip(run), popcornError: err.message };
       }
       throw err;
@@ -203,6 +326,29 @@ export async function advanceChannelRun(runId: string): Promise<AdvanceResult | 
       console.warn("[advance-run] tiktok status check error:", message);
       return { run: strip(run), tiktokStatus: "STATUS_FETCH_ERROR" };
     }
+  }
+
+  // (d) Final timeout guard — if we've blown the wall-clock budget and the
+  // attempts above didn't push us to a terminal state, fail with a message
+  // that names the actual stage we couldn't get past. Without this guard,
+  // runs would silently stay non-terminal forever once the dedicated
+  // timeout branch fell through.
+  if (elapsedMs > RUN_TIMEOUT_MS && run.status !== "posted" && run.status !== "failed") {
+    const minutes = Math.round(elapsedMs / 60000);
+    const stageMsg =
+      run.status === "ready"
+        ? `couldn't start the TikTok upload (run is "ready" with a video URL but the upload step never ran to terminal).`
+        : run.status === "uploaded"
+          ? `TikTok accepted the upload but never confirmed publish. The bytes are on TikTok; check the TikTok app inbox.`
+          : `still in state "${run.status}".`;
+    run = await prisma.channelRun.update({
+      where: { id: run.id },
+      data: {
+        status: "failed",
+        errorMessage: `Run timed out after ${minutes} minutes — ${stageMsg}`,
+      },
+      include: runInclude,
+    });
   }
 
   return { run: strip(run) };

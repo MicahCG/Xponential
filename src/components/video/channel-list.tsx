@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -60,6 +60,25 @@ export function ChannelList({ tiktokConnections }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   // Map of runId → status while we're polling
   const [polling, setPolling] = useState<Record<string, Run | undefined>>({});
+  const [rescuing, setRescuing] = useState<Record<string, string | undefined>>(
+    {}
+  );
+  // Tracks active poll loops so we never spawn a duplicate for the same run
+  // and so we can cancel them on unmount. Production logs showed up to ~8
+  // run-detail calls per second per run — multiple loops compounding from
+  // repeat "Generate video" clicks and tab switches. Each loop also drove a
+  // Popcorn + TikTok API call, so the stampede had real downstream cost.
+  const pollersRef = useRef<Map<string, { cancelled: boolean }>>(new Map());
+  // Also cleared on unmount so stale closures don't keep firing.
+  useEffect(() => {
+    const pollers = pollersRef.current;
+    return () => {
+      pollers.forEach((p) => {
+        p.cancelled = true;
+      });
+      pollers.clear();
+    };
+  }, []);
 
   const fetchChannels = useCallback(async () => {
     setLoading(true);
@@ -93,24 +112,85 @@ export function ChannelList({ tiktokConnections }: Props) {
   }
 
   function pollRun(channelId: string, runId: string) {
+    // De-dupe: if a poll loop is already running for this run, don't spawn a
+    // second one. This is the root cause of the prod stampede — repeated
+    // clicks / tab visibility changes / strict-mode double-mounts were each
+    // spawning a fresh setTimeout chain that never knew about the others.
+    if (pollersRef.current.get(runId)) return;
+    const handle = { cancelled: false };
+    pollersRef.current.set(runId, handle);
+
+    const finish = () => {
+      handle.cancelled = true;
+      pollersRef.current.delete(runId);
+    };
+
+    // Backoff schedule: 5s for the first minute, then 15s. Popcorn renders
+    // take 15-35 minutes, so frequent polling early on (just enough to feel
+    // responsive after click) then taper off — the 3-minute cron does the
+    // heavy lifting once you've navigated away anyway.
+    const startedAt = Date.now();
+    const nextDelay = () => (Date.now() - startedAt < 60_000 ? 5_000 : 15_000);
+
     const tick = async () => {
+      if (handle.cancelled) return;
       try {
         const res = await fetch(`/api/channels/${channelId}/runs/${runId}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        const run = data.run as Run | undefined;
-        if (!run) return;
-        setPolling((prev) => ({ ...prev, [runId]: run }));
-        if (run.status === "posted" || run.status === "failed") {
-          fetchChannels(); // refresh the channel cards' run history
+        if (handle.cancelled) return;
+        if (!res.ok) {
+          // Treat non-2xx as transient; back off but keep going.
+          setTimeout(tick, 10_000);
           return;
         }
-        setTimeout(tick, 5000);
+        const data = await res.json();
+        const run = data.run as Run | undefined;
+        if (!run) {
+          finish();
+          return;
+        }
+        setPolling((prev) => ({ ...prev, [runId]: run }));
+        if (run.status === "posted" || run.status === "failed") {
+          finish();
+          fetchChannels();
+          return;
+        }
+        setTimeout(tick, nextDelay());
       } catch {
-        setTimeout(tick, 8000);
+        if (handle.cancelled) return;
+        setTimeout(tick, 10_000);
       }
     };
-    setTimeout(tick, 2000);
+    setTimeout(tick, 2_000);
+  }
+
+  async function rescueRun(channelId: string, runId: string) {
+    setRescuing((prev) => ({ ...prev, [runId]: "Checking Popcorn…" }));
+    try {
+      const res = await fetch(
+        `/api/channels/${channelId}/runs/${runId}/rescue`,
+        { method: "POST" }
+      );
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.ok) {
+        setRescuing((prev) => ({
+          ...prev,
+          [runId]: "Recovered — uploading to TikTok…",
+        }));
+        pollRun(channelId, runId);
+        fetchChannels();
+      } else {
+        setRescuing((prev) => ({
+          ...prev,
+          [runId]:
+            body.message ?? body.error ?? `Recovery failed (HTTP ${res.status})`,
+        }));
+      }
+    } catch (err) {
+      setRescuing((prev) => ({
+        ...prev,
+        [runId]: err instanceof Error ? err.message : "Recovery failed",
+      }));
+    }
   }
 
   async function deleteChannel(channelId: string) {
@@ -161,19 +241,26 @@ export function ChannelList({ tiktokConnections }: Props) {
         </Card>
       ) : (
         <div className="space-y-3">
-          {channels.map((ch) => (
-            <ChannelCard
-              key={ch.id}
-              channel={ch}
-              activeRun={
-                ch.runs[0]
-                  ? polling[ch.runs[0].id] ?? ch.runs[0]
-                  : undefined
-              }
-              onRun={() => runChannel(ch.id)}
-              onDelete={() => deleteChannel(ch.id)}
-            />
-          ))}
+          {channels.map((ch) => {
+            const activeRun = ch.runs[0]
+              ? polling[ch.runs[0].id] ?? ch.runs[0]
+              : undefined;
+            return (
+              <ChannelCard
+                key={ch.id}
+                channel={ch}
+                activeRun={activeRun}
+                onRun={() => runChannel(ch.id)}
+                onDelete={() => deleteChannel(ch.id)}
+                onRescue={
+                  activeRun && activeRun.status === "failed"
+                    ? () => rescueRun(ch.id, activeRun.id)
+                    : undefined
+                }
+                rescueMessage={activeRun ? rescuing[activeRun.id] : undefined}
+              />
+            );
+          })}
         </div>
       )}
 
@@ -196,11 +283,15 @@ function ChannelCard({
   activeRun,
   onRun,
   onDelete,
+  onRescue,
+  rescueMessage,
 }: {
   channel: Channel;
   activeRun: Run | undefined;
   onRun: () => void;
   onDelete: () => void;
+  onRescue?: () => void;
+  rescueMessage?: string;
 }) {
   const inProgress =
     activeRun?.status === "generating" ||
@@ -270,6 +361,22 @@ function ChannelCard({
             {activeRun.errorMessage && (
               <div className="mt-1 text-xs text-destructive">
                 {activeRun.errorMessage}
+              </div>
+            )}
+            {onRescue && (
+              <div className="mt-2 flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={onRescue}>
+                  Try recovery
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Re-checks Popcorn — if the video actually finished, resends
+                  it to TikTok without burning a new generation.
+                </span>
+              </div>
+            )}
+            {rescueMessage && (
+              <div className="mt-1 text-xs text-muted-foreground">
+                {rescueMessage}
               </div>
             )}
             {activeRun.status === "posted" && (
