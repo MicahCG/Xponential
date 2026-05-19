@@ -109,30 +109,76 @@ async function rawRpc<T>(
   let data: JsonRpcResponse<T>;
   if (contentType.includes("text/event-stream")) {
     const text = await res.text();
-    const dataLine = text
-      .split(/\r?\n/)
-      .find((line) => line.startsWith("data:"));
-    if (!dataLine) {
-      throw new PopcornError({
-        message: "Popcorn MCP returned an empty SSE stream.",
-        code: "empty_sse",
-        raw: text,
-      });
-    }
-    try {
-      data = JSON.parse(dataLine.slice(5).trim()) as JsonRpcResponse<T>;
-    } catch (err) {
-      throw new PopcornError({
-        message: `Popcorn MCP returned malformed SSE: ${err instanceof Error ? err.message : "parse error"}`,
-        code: "sse_parse_error",
-        raw: text,
-      });
-    }
+    data = pickJsonRpcResponseFromSse(text, payload.id);
   } else {
     data = (await res.json()) as JsonRpcResponse<T>;
   }
 
   return { data, response: res };
+}
+
+/**
+ * Parse an SSE stream and return the JSON-RPC response that matches the
+ * request id. MCP servers can send multiple events in a single response:
+ * progress notifications, log messages, and finally the result. The earlier
+ * version of this code grabbed the FIRST data line, which is why long-running
+ * Popcorn movies that *did* complete got marked "failed" or "still generating"
+ * — we were reading intermediate notifications instead of the actual
+ * response. Pick the message whose JSON-RPC `id` matches what we sent; fall
+ * back to the last well-formed JSON-RPC message if no id matches.
+ */
+function pickJsonRpcResponseFromSse<T>(
+  text: string,
+  requestId: number
+): JsonRpcResponse<T> {
+  // SSE events are delimited by blank lines. Within an event, data fields
+  // concatenate (joined with newline per spec). We don't care about event
+  // names — only the data payloads.
+  const events = text.split(/\r?\n\r?\n/);
+  const messages: JsonRpcResponse<T>[] = [];
+  for (const event of events) {
+    const dataLines = event
+      .split(/\r?\n/)
+      .filter((l) => l.startsWith("data:"))
+      .map((l) => l.slice(5).trimStart());
+    if (dataLines.length === 0) continue;
+    const joined = dataLines.join("\n");
+    try {
+      const parsed = JSON.parse(joined) as Partial<JsonRpcResponse<T>>;
+      if (parsed && (parsed as { jsonrpc?: string }).jsonrpc === "2.0") {
+        messages.push(parsed as JsonRpcResponse<T>);
+      }
+    } catch {
+      // Not JSON, skip — it's likely a status/log notification we don't model.
+    }
+  }
+
+  if (messages.length === 0) {
+    throw new PopcornError({
+      message: "Popcorn MCP returned an SSE stream with no JSON-RPC messages.",
+      code: "empty_sse",
+      raw: text,
+    });
+  }
+
+  // Prefer the one with our request id (that's the actual response per spec).
+  const match = messages.find(
+    (m) => (m as { id?: number }).id === requestId
+  );
+  if (match) return match;
+
+  // No id match — could be a server that doesn't echo ids, or our request id
+  // was rewritten. Fall back to the last message with a `result` or `error`
+  // field (notifications have neither).
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i] as { result?: unknown; error?: unknown };
+    if (m.result !== undefined || m.error !== undefined) {
+      return messages[i];
+    }
+  }
+
+  // Last resort: return the final message.
+  return messages[messages.length - 1];
 }
 
 /**

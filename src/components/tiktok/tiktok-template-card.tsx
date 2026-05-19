@@ -41,6 +41,7 @@ interface RunRow {
   videoUrl: string | null;
   platformPostId: string | null;
   errorMessage: string | null;
+  popcornMovieId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -387,13 +388,25 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
                   {recentRuns.slice(0, 5).map((r) => (
                     <li
                       key={r.id}
-                      className="flex items-center gap-2 border-t py-1.5 text-xs"
+                      className="space-y-1 border-t py-1.5 text-xs"
                     >
-                      <RunStatusIcon status={r.status} />
-                      <span>{prettyStatus(r.status)}</span>
-                      <span className="ml-auto text-muted-foreground">
-                        {new Date(r.createdAt).toLocaleString()}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <RunStatusIcon status={r.status} />
+                        <span>{prettyStatus(r.status)}</span>
+                        <span className="ml-auto text-muted-foreground">
+                          {new Date(r.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                      {r.errorMessage && (
+                        <div className="ml-6 text-destructive">
+                          {r.errorMessage}
+                        </div>
+                      )}
+                      {r.popcornMovieId && (
+                        <div className="ml-6 font-mono text-[10px] text-muted-foreground">
+                          movie: {r.popcornMovieId}
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>

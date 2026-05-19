@@ -75,6 +75,7 @@ export async function GET(
       videoUrl: true,
       platformPostId: true,
       errorMessage: true,
+      popcornMovieId: true,
       createdAt: true,
       updatedAt: true,
     },
