@@ -310,7 +310,94 @@ export async function initDraftUpload(
     });
   }
 
-  return { publishId: init.data.publish_id };
+  // 4. PUT-returned-200 only means the bytes arrived. TikTok processes the
+  // video asynchronously and can still reject it (bad codec, watermark
+  // detection, duration violation, etc.). Poll status/fetch until we see a
+  // verdict so we never lie to the user about a "Draft sent" that doesn't
+  // actually appear in their TikTok inbox.
+  const publishId = init.data.publish_id;
+  const verdict = await waitForPublishVerdict(conn, publishId);
+  if (verdict.failed) {
+    throw new TikTokApiError({
+      message: `TikTok rejected the upload — ${verdict.status}${verdict.failReason ? `: ${verdict.failReason}` : ""}`,
+      httpCode: 0,
+      responseBody: verdict.raw,
+    });
+  }
+
+  return { publishId };
+}
+
+/**
+ * Poll /post/publish/status/fetch/ until TikTok hits a state we can interpret.
+ *
+ * Inbox flow terminal states:
+ *   SEND_TO_USER_INBOX  → success, user must approve in the TikTok app
+ *   PUBLISH_COMPLETE    → success (uncommon for inbox endpoint but possible)
+ *   FAILED              → terminal failure with fail_reason
+ *
+ * Non-terminal: PROCESSING_DOWNLOAD, PROCESSING_UPLOAD. If we're still in one
+ * of these past the timeout, accept it optimistically — TikTok's processing
+ * occasionally takes minutes, and the run can still complete successfully
+ * after we return. We only throw when we have a definitive FAILED verdict.
+ */
+async function waitForPublishVerdict(
+  conn: ConnectionWithTokens,
+  publishId: string
+): Promise<{
+  failed: boolean;
+  status: string;
+  failReason?: string;
+  raw?: unknown;
+}> {
+  const TIMEOUT_MS = 60_000;
+  const POLL_INTERVAL_MS = 3_000;
+  const started = Date.now();
+  let last: PublishStatus | null = null;
+
+  while (Date.now() - started < TIMEOUT_MS) {
+    try {
+      last = await fetchPublishStatus(conn, publishId);
+    } catch (err) {
+      // Transient status-fetch errors shouldn't kill the run — keep trying.
+      console.warn(
+        "[tiktok-client] status/fetch transient error:",
+        err instanceof Error ? err.message : err
+      );
+      await sleep(POLL_INTERVAL_MS);
+      continue;
+    }
+
+    const s = last.status.toUpperCase();
+    if (s === "FAILED") {
+      return {
+        failed: true,
+        status: s,
+        failReason: last.failReason,
+        raw: last,
+      };
+    }
+    if (
+      s === "SEND_TO_USER_INBOX" ||
+      s === "PUBLISH_COMPLETE" ||
+      s === "PUBLISH_COMPLETE_OK"
+    ) {
+      return { failed: false, status: s, raw: last };
+    }
+    await sleep(POLL_INTERVAL_MS);
+  }
+
+  // Timed out without a verdict. Treat as success (it can still resolve
+  // server-side) but include the last status seen in the run record for debug.
+  return {
+    failed: false,
+    status: last?.status ?? "UNKNOWN_TIMEOUT",
+    raw: last,
+  };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 export interface PublishStatus {
