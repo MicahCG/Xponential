@@ -151,31 +151,48 @@ export async function POST(
   try {
     const movie = await getMovie(run.popcornMovieId);
     const norm = normalizeStatus(movie.status);
-    if (norm !== "ready" || !movie.videoUrl) {
+
+    if (norm === "ready" && movie.videoUrl) {
+      const updated = await prisma.channelRun.update({
+        where: { id: run.id },
+        data: { status: "ready", videoUrl: movie.videoUrl, errorMessage: null },
+        select: { id: true, status: true, videoUrl: true },
+      });
+      return NextResponse.json({ ok: true, via: "popcorn", run: updated });
+    }
+
+    if (norm === "failed") {
       return NextResponse.json(
         {
           ok: false,
           parsedStatus: movie.status,
           normalizedStatus: norm,
-          videoUrl: movie.videoUrl,
-          message:
-            norm === "failed"
-              ? `Popcorn movie itself failed: ${movie.errorMessage ?? movie.status}`
-              : `Popcorn movie is not ready yet (${movie.status}).`,
+          message: `Popcorn movie itself failed: ${movie.errorMessage ?? movie.status}`,
         },
         { status: 409 }
       );
     }
+
+    // Popcorn is still working (or recovered from a transient interrupt
+    // state — we've seen status flip from "failed: interrupted" back to
+    // "running" minutes later). Put the run back in the queue so the cron
+    // resumes polling; the user doesn't have to babysit it.
     const updated = await prisma.channelRun.update({
       where: { id: run.id },
       data: {
-        status: "ready",
-        videoUrl: movie.videoUrl,
-        errorMessage: null,
+        status: "generating",
+        errorMessage: `Re-queued. Popcorn currently reports ${movie.status}${
+          movie.errorMessage ? ` — ${movie.errorMessage}` : ""
+        }.`,
       },
-      select: { id: true, status: true, videoUrl: true },
+      select: { id: true, status: true },
     });
-    return NextResponse.json({ ok: true, via: "popcorn", run: updated });
+    return NextResponse.json({
+      ok: true,
+      via: "popcorn",
+      message: `Popcorn is still working (${movie.status}). Run is back in the queue — the cron will pick it up.`,
+      run: updated,
+    });
   } catch (err) {
     const message =
       err instanceof PopcornError

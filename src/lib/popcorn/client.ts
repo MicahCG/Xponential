@@ -470,8 +470,11 @@ export async function getMovie(movieId: string): Promise<PopcornMovieState> {
   const progress =
     top && typeof top.progress === "number" ? (top.progress as number) : null;
 
+  // Popcorn uses different keys in different places: "error" for transient
+  // worker failures (e.g. "interrupted"), "error_message" / "errorMessage" for
+  // structured failures. Capture all so callers see *why* Popcorn flagged it.
   const errorMessage =
-    findString(result, ["error_message", "errorMessage"]) ?? null;
+    findString(result, ["error_message", "errorMessage", "error"]) ?? null;
 
   return {
     id: movieId,
