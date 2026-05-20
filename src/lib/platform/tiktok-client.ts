@@ -500,6 +500,7 @@ export async function loadActiveConnection(
       accessToken: true,
       refreshToken: true,
       tokenExpires: true,
+      scopes: true,
     },
   });
   if (!conn || !conn.accessToken) return null;
@@ -526,6 +527,7 @@ export async function loadConnectionById(
       accessToken: true,
       refreshToken: true,
       tokenExpires: true,
+      scopes: true,
     },
   });
   if (!conn || !conn.accessToken) return null;
