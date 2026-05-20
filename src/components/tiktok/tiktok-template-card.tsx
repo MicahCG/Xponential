@@ -66,6 +66,10 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
   const [popcornHint, setPopcornHint] = useState<string | null>(null);
   const [tiktokStatus, setTiktokStatus] = useState<string | null>(null);
   const [recentRuns, setRecentRuns] = useState<RunRow[]>([]);
+  // Per-run rescue status messages keyed by runId.
+  const [rescuing, setRescuing] = useState<Record<string, string | undefined>>(
+    {}
+  );
 
   const fetchTemplate = useCallback(async () => {
     setLoading(true);
@@ -172,6 +176,46 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
       setSavedPrompt(prompt);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function rescueRun(runId: string) {
+    if (!channelId) return;
+    setRescuing((p) => ({ ...p, [runId]: "Checking…" }));
+    try {
+      const res = await fetch(
+        `/api/channels/${channelId}/runs/${runId}/rescue`,
+        { method: "POST" }
+      );
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.ok) {
+        setRescuing((p) => ({
+          ...p,
+          [runId]:
+            body.message ??
+            (body.via === "tiktok"
+              ? "TikTok already had it — marking posted."
+              : body.via === "popcorn"
+                ? "Recovered — uploading to TikTok…"
+                : "Recovered."),
+        }));
+        // Reload the template so the run list reflects the new status, and
+        // pick up the rescued run as active if it's now in-flight.
+        await fetchTemplate();
+      } else {
+        setRescuing((p) => ({
+          ...p,
+          [runId]:
+            body.message ??
+            body.error ??
+            `Recovery failed (HTTP ${res.status})`,
+        }));
+      }
+    } catch (err) {
+      setRescuing((p) => ({
+        ...p,
+        [runId]: err instanceof Error ? err.message : "Recovery failed",
+      }));
     }
   }
 
@@ -339,6 +383,31 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
                     {activeRun.errorMessage}
                   </div>
                 )}
+                {activeRun.status === "failed" && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => rescueRun(activeRun.id)}
+                      disabled={rescuing[activeRun.id] === "Checking…"}
+                    >
+                      {rescuing[activeRun.id] === "Checking…"
+                        ? "Checking…"
+                        : "Try recovery"}
+                    </Button>
+                    <span className="text-muted-foreground">
+                      Re-checks Popcorn + TikTok. If either system has the
+                      video, we&apos;ll pick it up without burning a new
+                      generation.
+                    </span>
+                    {rescuing[activeRun.id] &&
+                      rescuing[activeRun.id] !== "Checking…" && (
+                        <span className="text-muted-foreground">
+                          — {rescuing[activeRun.id]}
+                        </span>
+                      )}
+                  </div>
+                )}
                 {activeRun.status === "posted" && (
                   <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
                     {activeRun.videoUrl && (
@@ -393,7 +462,7 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
             </div>
 
             {recentRuns.length > 1 && (
-              <details className="text-xs">
+              <details className="text-xs" open>
                 <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
                   Recent runs ({recentRuns.length})
                 </summary>
@@ -418,6 +487,25 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
                       {r.popcornMovieId && (
                         <div className="ml-6 font-mono text-[10px] text-muted-foreground">
                           movie: {r.popcornMovieId}
+                        </div>
+                      )}
+                      {r.status === "failed" && (
+                        <div className="ml-6 flex flex-wrap items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => rescueRun(r.id)}
+                            disabled={rescuing[r.id] === "Checking…"}
+                          >
+                            {rescuing[r.id] === "Checking…"
+                              ? "Checking…"
+                              : "Try recovery"}
+                          </Button>
+                          {rescuing[r.id] && rescuing[r.id] !== "Checking…" && (
+                            <span className="text-muted-foreground">
+                              {rescuing[r.id]}
+                            </span>
+                          )}
                         </div>
                       )}
                     </li>
