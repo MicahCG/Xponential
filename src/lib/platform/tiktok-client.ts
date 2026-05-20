@@ -75,6 +75,15 @@ interface ConnectionWithTokens {
   accessToken: string;
   refreshToken: string | null;
   tokenExpires: Date | null;
+  scopes?: string | null;
+}
+
+function hasScope(conn: ConnectionWithTokens, scope: string): boolean {
+  if (!conn.scopes) return false;
+  return conn.scopes
+    .split(/[\s,]+/)
+    .map((s) => s.trim())
+    .includes(scope);
 }
 
 async function ensureFreshToken(conn: ConnectionWithTokens): Promise<string> {
@@ -249,12 +258,18 @@ export interface InitDraftUploadResult {
 }
 
 /**
- * Sends a video draft to the user's TikTok inbox using the FILE_UPLOAD source.
+ * Posts a video to the user's TikTok profile via the Direct Post endpoint
+ * (/post/publish/video/init/). Despite the legacy function name, this is
+ * NOT the inbox/draft flow — we switched on 2026-05-20 because the inbox
+ * endpoint silently stalls every upload in PROCESSING_UPLOAD for this
+ * sandbox (14-for-14 across 2 days, none ever delivered).
  *
- * Why not PULL_FROM_URL? TikTok requires the source domain to be verified in
- * the developer portal, and Popcorn videos live on their CDN — a domain we
- * can't verify. FILE_UPLOAD has no such restriction: we fetch the bytes
- * ourselves and PUT them straight to TikTok's upload URL.
+ * Source: FILE_UPLOAD. We fetch the bytes from the upstream (Popcorn) and
+ * PUT them straight to TikTok's upload URL. PULL_FROM_URL would require
+ * verifying Popcorn's CDN domain in the dev portal, which we can't.
+ *
+ * Privacy: SELF_ONLY (private draft on the user's profile). Required for
+ * unaudited apps. The user can manually flip to public via the TikTok app.
  *
  * Popcorn shorts are well under TikTok's 64MB single-chunk threshold, so we
  * always upload as a single chunk (chunk_size = video_size, total_chunk_count = 1).
@@ -263,6 +278,18 @@ export async function initDraftUpload(
   conn: ConnectionWithTokens,
   input: InitDraftUploadInput
 ): Promise<InitDraftUploadResult> {
+  // 0. Pre-flight scope check. Direct Post requires video.publish; without
+  // it TikTok returns 401 "scope_not_authorized" and the run fails with a
+  // confusing message. Catch it here and tell the user exactly what to do.
+  if (!hasScope(conn, "video.publish")) {
+    throw new TikTokApiError({
+      message:
+        "TikTok connection is missing the video.publish scope (required for Direct Post). Disconnect and reconnect your TikTok account in Settings to re-authorize with the new scope.",
+      httpCode: 401,
+      isAuthError: true,
+    });
+  }
+
   // 1. Fetch the video bytes from Popcorn (or wherever).
   const videoRes = await fetch(input.videoUrl);
   if (!videoRes.ok) {
@@ -290,10 +317,18 @@ export async function initDraftUpload(
     });
   }
 
-  // 2. Init the upload — TikTok hands us back an upload_url.
+  // 2. Init the upload — TikTok hands us back an upload_url. Direct Post
+  // requires post_info with privacy_level set; SELF_ONLY is mandatory for
+  // unaudited apps and the only value TikTok will accept here.
   const init = await apiFetch<{
     data: { publish_id: string; upload_url: string };
-  }>(conn, "POST", "/post/publish/inbox/video/init/", {
+  }>(conn, "POST", "/post/publish/video/init/", {
+    post_info: {
+      privacy_level: "SELF_ONLY",
+      disable_comment: false,
+      disable_duet: false,
+      disable_stitch: false,
+    },
     source_info: {
       source: "FILE_UPLOAD",
       video_size: videoSize,
@@ -448,6 +483,7 @@ export async function loadActiveConnection(
         accessToken: true,
         refreshToken: true,
         tokenExpires: true,
+        scopes: true,
       },
     });
     if (!full || !full.accessToken) return null;

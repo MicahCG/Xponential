@@ -272,9 +272,10 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
         <CardTitle className="text-base">Video prompt template</CardTitle>
         <CardDescription>
           The prompt below is sent to Popcorn each time you click Generate.
-          Popcorn builds the video, then Xponential sends it as a draft to{" "}
+          Popcorn builds the video, then Xponential posts it as a private
+          draft on{" "}
           <span className="font-medium text-foreground">@{accountHandle}</span>
-          &apos;s TikTok inbox.
+          &apos;s TikTok profile — open the TikTok app to review and publish.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -422,8 +423,9 @@ export function TikTokTemplateCard({ connectionId, accountHandle }: Props) {
                       </a>
                     )}
                     <span className="text-muted-foreground">
-                      Draft sent to @{accountHandle}&apos;s TikTok inbox — open
-                      TikTok to review and publish.
+                      Posted to @{accountHandle} as a private (SELF_ONLY)
+                      draft. Open the TikTok app → your profile to review and
+                      flip it to public.
                     </span>
                   </div>
                 )}
@@ -538,7 +540,7 @@ function prettyStatus(s: string) {
   if (s === "ready") return "Uploading to TikTok…";
   if (s === "posting") return "Uploading to TikTok…";
   if (s === "uploaded") return "Awaiting TikTok confirmation…";
-  if (s === "posted") return "Draft delivered to TikTok inbox";
+  if (s === "posted") return "Posted to TikTok as private draft";
   if (s === "failed") return "Failed";
   if (s === "pending") return "Queued";
   return s;

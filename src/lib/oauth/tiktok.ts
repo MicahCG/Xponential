@@ -3,10 +3,18 @@ import crypto from "crypto";
 const TIKTOK_AUTH_URL = "https://www.tiktok.com/v2/auth/authorize/";
 const TIKTOK_TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/";
 
-// Phase 1 scopes — read profile + send video drafts to inbox.
-// video.publish (direct posting) is intentionally NOT requested until the
-// app has been audited by TikTok for production direct-post privileges.
-const SCOPES = ["user.info.basic", "video.upload"];
+// Scopes we request during OAuth.
+//   user.info.basic  → display name + open_id (account identity)
+//   video.upload     → inbox/draft flow (kept for fallback)
+//   video.publish    → Direct Post — the flow we actually use now
+//
+// We added video.publish on 2026-05-20 because the inbox flow gets stuck in
+// PROCESSING_UPLOAD indefinitely for this sandbox — 14-for-14 uploads across
+// 2 days never transitioned out of that state. The sandbox config has Direct
+// Post enabled and offers the video.publish scope, so we switched to that.
+// For unaudited apps, Direct Post uploads land as SELF_ONLY (private) drafts
+// on the user's profile, which they can then promote to public manually.
+const SCOPES = ["user.info.basic", "video.upload", "video.publish"];
 
 export function generateState() {
   return crypto.randomBytes(16).toString("hex");

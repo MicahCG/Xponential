@@ -393,7 +393,8 @@ function ChannelCard({
                   </a>
                 )}
                 <span className="text-muted-foreground">
-                  Draft sent to your TikTok inbox — publish from the TikTok app.
+                  Posted as a private (SELF_ONLY) draft on your TikTok
+                  profile. Open the TikTok app to review and flip to public.
                 </span>
               </div>
             )}
@@ -438,7 +439,7 @@ function prettyStatus(s: string) {
   if (s === "generating") return "Generating video…";
   if (s === "ready") return "Posting to TikTok…";
   if (s === "posting") return "Posting to TikTok…";
-  if (s === "posted") return "Posted to TikTok inbox";
+  if (s === "posted") return "Posted to TikTok (private draft)";
   if (s === "failed") return "Failed";
   if (s === "pending") return "Queued";
   return s;
