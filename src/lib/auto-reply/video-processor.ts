@@ -210,11 +210,16 @@ export async function processVideoReplies(): Promise<VideoProcessResult> {
           const compressedUrl = await compressVideo(videoUrl);
 
           // Start the Apify run ASYNC — don't block waiting.
+          // Pass platformConnectionId so the cookie picker resolves to the
+          // exact watched account's connection. Without it, Apify uses
+          // whichever X cookie findFirst picks for this user — silently
+          // posting from the wrong handle when multiple X accounts exist.
           const { runId } = await startTweetViaApify(
             log.userId,
             tweetText,
             log.targetTweetId,
-            compressedUrl
+            compressedUrl,
+            log.watchedAccount.platformConnectionId ?? undefined
           );
 
           await prisma.autoReplyLog.update({

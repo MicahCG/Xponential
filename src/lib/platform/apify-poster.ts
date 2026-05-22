@@ -20,21 +20,58 @@ function getApifyToken(): string {
  * Gets the stored Twitter cookie for a user's X platform connection.
  */
 async function getTwitterCookie(userId: string, connectionId?: string): Promise<string> {
-  const connection = connectionId
-    ? await prisma.platformConnection.findFirst({
-        where: { id: connectionId, userId },
-      })
-    : await prisma.platformConnection.findFirst({
-        where: { userId, platform: "x", status: "active" },
+  if (connectionId) {
+    const connection = await prisma.platformConnection.findFirst({
+      where: { id: connectionId, userId },
+    });
+    if (!connection) {
+      throw new XPostError({
+        message: "X account not connected. Connect your X account first.",
+        isAuthError: true,
       });
+    }
+    if (!connection.twitterCookie) {
+      throw new XPostError({
+        message:
+          "Twitter cookie is not configured. Add your Twitter cookie in settings.",
+        isAuthError: true,
+      });
+    }
+    return connection.twitterCookie;
+  }
 
-  if (!connection) {
+  // No connectionId — pick from active X connections. The old code used
+  // findFirst with no orderBy, which silently picked an arbitrary
+  // connection by id. For users with multiple X accounts under one user
+  // (e.g. @Popcorn_Co + @cydelmg), this meant Popcorn_Co's auto-replies
+  // were posting as cydelmg for ~4 days because the older cuid won.
+  //
+  // New behavior: explicitly order by most-recently-connected, AND if
+  // there's more than one active connection, log a loud warning so the
+  // ambiguity is visible in Vercel logs. Callers should always pass
+  // connectionId; falling back to "most recent" is best-effort only.
+  const connections = await prisma.platformConnection.findMany({
+    where: { userId, platform: "x", status: "active" },
+    orderBy: { connectedAt: "desc" },
+  });
+
+  if (connections.length === 0) {
     throw new XPostError({
       message: "X account not connected. Connect your X account first.",
       isAuthError: true,
     });
   }
 
+  if (connections.length > 1) {
+    console.warn(
+      `[apify-poster] AMBIGUOUS X connection: user ${userId} has ${connections.length} active X connections ` +
+        `(${connections.map((c) => `@${c.accountHandle}`).join(", ")}) and no connectionId was passed. ` +
+        `Falling back to most recently connected: @${connections[0].accountHandle}. ` +
+        `This is the bug that posted Popcorn_Co's replies under cydelmg's profile — find the call site and pass connectionId.`
+    );
+  }
+
+  const connection = connections[0];
   if (!connection.twitterCookie) {
     throw new XPostError({
       message:
@@ -42,7 +79,6 @@ async function getTwitterCookie(userId: string, connectionId?: string): Promise<
       isAuthError: true,
     });
   }
-
   return connection.twitterCookie;
 }
 

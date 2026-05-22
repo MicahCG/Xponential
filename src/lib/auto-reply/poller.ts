@@ -243,10 +243,19 @@ export async function pollWatchedAccounts(): Promise<PollResult> {
               if (account.replyMode === "auto") {
                 // Auto mode: post immediately (with auto token refresh on 401)
                 try {
+                  // Pass connectionId so the cookie picker resolves to THIS
+                  // watched account's connection. Without it, getTwitterCookie
+                  // falls back to findFirst({userId,platform:"x"}), which for
+                  // users with multiple X accounts (e.g. @Popcorn_Co +
+                  // @cydelmg under the same user) silently picked the older
+                  // connection — every Popcorn_Co reply was posting from
+                  // cydelmg's profile instead.
                   const posted = await postTweetWithRetry(
                     userId,
                     replyContent,
-                    tweet.id
+                    tweet.id,
+                    undefined,
+                    connectionId
                   );
 
                   await prisma.autoReplyLog.create({

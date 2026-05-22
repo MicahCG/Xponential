@@ -146,9 +146,10 @@ export async function postTweetWithRetry(
   userId: string,
   text: string,
   replyToId?: string,
-  mediaUrl?: string
+  mediaUrl?: string,
+  connectionId?: string
 ): Promise<{ id: string }> {
-  return postTweetViaApify(userId, text, replyToId, mediaUrl);
+  return postTweetViaApify(userId, text, replyToId, mediaUrl, connectionId);
 }
 
 export async function getUserProfile(accessToken: string) {

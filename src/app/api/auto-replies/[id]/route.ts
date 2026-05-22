@@ -59,10 +59,13 @@ export async function PUT(
   // Approve: post the reply (use edited content if provided)
   const contentToPost = editedContent?.trim() || replyLog.replyContent;
 
-  // Determine platform from the watched account
+  // Determine platform + which connection owns this watched account. The
+  // platformConnectionId is critical: without it postTweetWithRetry falls
+  // back to picking an arbitrary X cookie for the user, which silently
+  // posts from the wrong handle when the user has multiple X accounts.
   const watchedAccount = await prisma.watchedAccount.findUnique({
     where: { id: replyLog.watchedAccountId },
-    select: { platform: true },
+    select: { platform: true, platformConnectionId: true },
   });
   const platform = watchedAccount?.platform ?? "x";
 
@@ -78,7 +81,8 @@ export async function PUT(
       session.user.id,
       contentToPost,
       replyLog.targetTweetId,
-      mediaUrl
+      mediaUrl,
+      watchedAccount?.platformConnectionId ?? undefined
     );
     postedId = result.id;
 
